@@ -19,6 +19,10 @@ static char advance(Scanner* scanner) {
 	return scanner->current[-1];
 }
 
+static void advanceMulti(Scanner* scanner, int count) {
+	scanner->current += count;
+}
+
 static char peek(Scanner* scanner) {
 	return *scanner->current;
 }
@@ -45,6 +49,10 @@ static bool isDigit(char c) {
 
 static bool isAlpha(char c) {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+static bool isAlphaOrDigit(char c) {
+	return isAlpha(c) || isDigit(c);
 }
 
 static TokenType checkKeyword(Scanner* scanner, int start, int length, const char* rest, TokenType type) {
@@ -77,6 +85,9 @@ static void skipBlockComment(Scanner* scanner) {
 
 	while (depth > 0 && !isAtEnd(scanner)) {
 		switch (advance(scanner)) {
+		case '\n':
+			scanner->line++;
+			break;
 		case '/':
 			if (peek(scanner) == '*') {
 				advance(scanner);
@@ -116,6 +127,7 @@ static TokenType identifierType(Scanner* scanner) {
 		if (scanner->current - scanner->start == 2) {
 			switch (scanner->start[1]) {
 			case 'f': return TOKEN_IF;
+			case 'n': return TOKEN_IN;
 			case 's': return TOKEN_IS;
 			}
 		}
@@ -129,7 +141,7 @@ static TokenType identifierType(Scanner* scanner) {
 }
 
 static Token identifier(Scanner* scanner) {
-	while (isAlpha(peek(scanner)) || isDigit(peek(scanner))) advance(scanner);
+	while (isAlphaOrDigit(peek(scanner))) advance(scanner);
 	return makeToken(scanner, identifierType(scanner));
 }
 
@@ -206,6 +218,38 @@ Token scanToken(Scanner* scanner) {
 				advance(scanner);
 				skipBlockComment(scanner);
 				break;
+			case 'c':
+				if (scanner->current[1] == 'l' &&
+					scanner->current[2] == 'a' &&
+					scanner->current[3] == 's' &&
+					scanner->current[4] == 's' &&
+					!isAlphaOrDigit(scanner->current[5])) {
+					advanceMulti(scanner, 5);
+					return makeToken(scanner, TOKEN_CLASS_END);
+				}
+				return makeToken(scanner, TOKEN_SLASH);
+			case 'f':
+				switch (scanner->current[1]) {
+				case 'n':
+					if (!isAlphaOrDigit(scanner->current[2])) {
+						advanceMulti(scanner, 2);
+						return makeToken(scanner, TOKEN_FN_END);
+					}
+					break;
+				case 'o':
+					if (scanner->current[2] == 'r' && !isAlphaOrDigit(scanner->current[3])) {
+						advanceMulti(scanner, 3);
+						return makeToken(scanner, TOKEN_FOR_END);
+					}
+					break;
+				}
+				return makeToken(scanner, TOKEN_SLASH);
+			case 'i':
+				if (scanner->current[1] == 'f' && !isAlphaOrDigit(scanner->current[2])) {
+					advanceMulti(scanner, 2);
+					return makeToken(scanner, TOKEN_IF_END);
+				}
+				return makeToken(scanner, TOKEN_SLASH);
 			default:
 				return makeToken(scanner, TOKEN_SLASH);
 			}
@@ -219,13 +263,6 @@ Token scanToken(Scanner* scanner) {
 			case '/':
 				advance(scanner);
 				resetLength(scanner);
-				break;
-			case 'c':
-			case 'f':
-			case 'i':
-
-				// TODO - end
-
 				break;
 			default:
 				return makeToken(scanner, TOKEN_STAR);

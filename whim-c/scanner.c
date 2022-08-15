@@ -108,8 +108,12 @@ static void skipBlockComment(Scanner* scanner) {
 
 static TokenType identifierType(Scanner* scanner) {
 	switch (scanner->start[0]) {
+	case '_':
+		if (scanner->current - scanner->start == 1) {
+			return TOKEN_UNDERSCORE;
+		}
+		break;
 	case 'a': return checkKeyword(scanner, 1, 2, "nd", TOKEN_AND);
-	case 'b': return checkKeyword(scanner, 1, 3, "ase", TOKEN_BASE);
 	case 'c': return checkKeyword(scanner, 1, 4, "lass", TOKEN_CLASS);
 	case 'e': return checkKeyword(scanner, 1, 3, "lse", TOKEN_ELSE);
 	case 'f':

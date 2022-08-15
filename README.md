@@ -27,18 +27,18 @@ myVar = 7
 first, second = second, first
 
 // lists, maps, and objects can be destructured
-first, second := ?myList
+first, second := from myList
 // is the same as
 first := myList[0]
 second := myList[1]
 
-first, second := ?myObject
+first, second := from myObject
 // is the same as
 first := myObject.first
 second := myObject.second
 
 // _ can be used to skip/discard a value
-first, _, third := ?myList
+first, _, third := from myList
 
 // mutability is per level, so a constant can have mutable fields
 

@@ -6,7 +6,7 @@ Simple embeddable programming language.
 ```
 // Whimsy, a simple embeddable language.
 
-/* muliline
+/* multiline
    comments
 
    /* nesting */ is also allowed
@@ -48,6 +48,12 @@ myFunc :: fn(x, y, z)
 
 // all functions are static and require an explicit self
 
+// these are equivalent
+first.func(second)
+func(first, second)
+
+// name resolution order: object, type, base type (recursively), global
+
 // blocks end with /block, eg /fn, /if, /for
 
 // class
@@ -56,6 +62,8 @@ MyClass :: class is Parent    // optional inheritance
 
   // constructor
   new :: fn(self, x, y)
+    self.base(x, y)       // call the base type constructor, passing in self (by using self.)
+                          // so it does not create a new object
     self.x := x
     self.y := y
   /fn
@@ -71,7 +79,8 @@ MyClass :: class is Parent    // optional inheritance
   /fn
 /class
 
-// initialization is just the class used as a function
+// initialization is just the class used as a function,
+// this automatically creates a new instance and passes it in as the first parameter
 myInst :: MyClass(1, 2)
 
 // lists are resizable indexable collections of any type
@@ -88,13 +97,13 @@ myList
 myList;
 [1]
 
-// this is a - b without a semicolon
+// without a semicolon this is a - b
 a
 -b
 
 // Type       Type Name
 // ---------  ---------
-// int/f64    Number        (automatic big int as necessary)
+// i64/f64    Number
 // string     String        "", ''
 // boolean    Bool          true, false
 // nil        Nil           nil

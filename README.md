@@ -103,7 +103,7 @@ a
 
 // Type       Type Name
 // ---------  ---------
-// i64/f64    Number
+// f64        Number
 // string     String        "", ''
 // boolean    Bool          true, false
 // nil        Nil           nil

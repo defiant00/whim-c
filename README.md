@@ -1,6 +1,8 @@
 # Whimsy
 Simple embeddable programming language.
 
+C implementation based on [Crafting Interpreters](http://craftinginterpreters.com/), to be used as a performance baseline when evaluating other options.
+
 ---
 
 ```

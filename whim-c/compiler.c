@@ -10,6 +10,7 @@
 #endif
 
 typedef struct {
+	VM* vm;
 	Scanner scanner;
 	Chunk* compilingChunk;
 	Token current;
@@ -171,6 +172,13 @@ static void number(Parser* parser) {
 	emitConstant(parser, NUMBER_VAL(value));
 }
 
+static void string(Parser* parser) {
+	// TODO - deal with escaped characters
+	emitConstant(parser, OBJ_VAL(copyString(parser->vm,
+		parser->previous.start + 1,
+		parser->previous.length - 2)));
+}
+
 static void unary(Parser* parser) {
 	TokenType operatorType = parser->previous.type;
 
@@ -214,7 +222,7 @@ ParseRule rules[] = {
 	[TOKEN_COLON_COLON] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IDENTIFIER] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_STRING] = {			NULL,		NULL,		PREC_NONE},
+	[TOKEN_STRING] = {			string,		NULL,		PREC_NONE},
 	[TOKEN_NUMBER] = {			number,		NULL,		PREC_NONE},
 	[TOKEN_AND] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS] = {			NULL,		NULL,		PREC_NONE},
@@ -263,10 +271,11 @@ static void expression(Parser* parser) {
 	parsePrecedence(parser, PREC_ASSIGN);
 }
 
-bool compile(const char* source, Chunk* chunk) {
+bool compile(VM* vm, const char* source, Chunk* chunk) {
 	Parser parser;
 	initScanner(&parser.scanner, source);
 
+	parser.vm = vm;
 	parser.compilingChunk = chunk;
 	parser.hadError = false;
 	parser.panicMode = false;

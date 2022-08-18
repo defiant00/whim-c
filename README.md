@@ -124,3 +124,12 @@ message := "Value is " + val.str()
 
 text: *.whim
 compiled: *.whir
+
+## TODO
+
+* mod op
+* \> 256 constants
+* common number ops
+* strings - flexible array members
+* support other key types for hash tables
+* string hash set for interning?

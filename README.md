@@ -128,7 +128,7 @@ val := 3 + someStr.num()
 message := "Value is " + val.str()
 ```
 
-text: *.whim
+text: *.whim  
 compiled: *.whir
 
 ## TODO

@@ -44,6 +44,12 @@ first, _, third := from myList
 
 // mutability is per level, so a constant can have mutable fields
 
+// import modules with use - the module is returned, so assign it to a variable or constant
+std :: use Some.Standard.Library
+
+// or maybe with a function?
+lib :: std.import(Some.Standard.Library)
+
 // function
 myFunc :: fn(x, y, z)
 /fn
@@ -82,7 +88,7 @@ MyClass :: class is Parent    // optional inheritance
 /class
 
 // initialization is just the class used as a function,
-// this automatically creates a new instance and passes it in as the first parameter
+// this automatically creates a new instance and passes it in as the first argument
 myInst :: MyClass(1, 2)
 
 // lists are resizable indexable collections of any type
@@ -128,8 +134,14 @@ compiled: *.whir
 ## TODO
 
 * mod op
+* better line number encoding
 * \> 256 constants
-* common number ops
+* error handling
+* directly load common number opcodes
+* escaped characters in strings
 * strings - flexible array members
 * support other key types for hash tables
 * string hash set for interning?
+* utf8
+* add synchronization points for new keywords like break and continue
+* don't allow global variable redefinition

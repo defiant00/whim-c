@@ -277,7 +277,7 @@ Token scanToken(Scanner* scanner) {
 			{
 			case '=':
 				advance(scanner);
-				return makeToken(scanner, TOKEN_COLON_COLON);
+				return makeToken(scanner, TOKEN_COLON_EQUAL);
 			case ':':
 				advance(scanner);
 				return makeToken(scanner, TOKEN_COLON_COLON);

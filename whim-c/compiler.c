@@ -25,7 +25,6 @@ static Chunk* currentChunk(Parser* parser) {
 
 typedef enum {
 	PREC_NONE,
-	PREC_ASSIGN,		// = += -= *= /=
 	PREC_OR,			// or
 	PREC_AND,			// and
 	PREC_EQUALITY,		// == !=
@@ -93,6 +92,16 @@ static void consume(Parser* parser, TokenType type, const char* message) {
 	errorAtCurrent(parser, message);
 }
 
+static bool check(Parser* parser, TokenType type) {
+	return parser->current.type == type;
+}
+
+static bool match(Parser* parser, TokenType type) {
+	if (!check(parser, type)) return false;
+	advance(parser);
+	return true;
+}
+
 static void emitByte(Parser* parser, uint8_t byte) {
 	writeChunk(currentChunk(parser), byte, parser->previous.line);
 }
@@ -130,8 +139,17 @@ static void endCompiler(Parser* parser) {
 }
 
 static void expression(Parser* parser);
+static void statement(Parser* parser);
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Parser* parser, Precedence precedence);
+
+static uint8_t identifierConstant(Parser* parser, Token* name) {
+	return makeConstant(parser, OBJ_VAL(copyString(parser->vm, name->start, name->length)));
+}
+
+static void defineVariable(Parser* parser, uint8_t global, bool constant) {
+	emitBytes(parser, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
+}
 
 static void binary(Parser* parser) {
 	TokenType operatorType = parser->previous.type;
@@ -179,6 +197,15 @@ static void string(Parser* parser) {
 		parser->previous.length - 2)));
 }
 
+static void namedVariable(Parser* parser, Token name) {
+	uint8_t arg = identifierConstant(parser, &name);
+	emitBytes(parser, OP_GET_GLOBAL, arg);
+}
+
+static void variable(Parser* parser) {
+	namedVariable(parser, parser->previous);
+}
+
 static void unary(Parser* parser) {
 	TokenType operatorType = parser->previous.type;
 
@@ -221,7 +248,7 @@ ParseRule rules[] = {
 	[TOKEN_STAR_EQUAL] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_COLON] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_IDENTIFIER] = {		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IDENTIFIER] = {		variable,	NULL,		PREC_NONE},
 	[TOKEN_STRING] = {			string,		NULL,		PREC_NONE},
 	[TOKEN_NUMBER] = {			number,		NULL,		PREC_NONE},
 	[TOKEN_AND] = {				NULL,		NULL,		PREC_NONE},
@@ -246,8 +273,7 @@ ParseRule rules[] = {
 	[TOKEN_EOF] = {				NULL,		NULL,		PREC_NONE},
 };
 
-static void parsePrecedence(Parser* parser, Precedence precedence) {
-	advance(parser);
+static void parsePrecedenceFromPrevious(Parser* parser, Precedence precedence) {
 	ParseFn prefixRule = getRule(parser->previous.type)->prefix;
 	if (prefixRule == NULL) {
 		error(parser, "Expect expression.");
@@ -263,12 +289,113 @@ static void parsePrecedence(Parser* parser, Precedence precedence) {
 	}
 }
 
+static void parsePrecedence(Parser* parser, Precedence precedence) {
+	advance(parser);
+	parsePrecedenceFromPrevious(parser, precedence);
+}
+
 static ParseRule* getRule(TokenType type) {
 	return &rules[type];
 }
 
 static void expression(Parser* parser) {
-	parsePrecedence(parser, PREC_ASSIGN);
+	parsePrecedence(parser, PREC_OR);
+}
+
+static void expressionFromPrevious(Parser* parser) {
+	parsePrecedenceFromPrevious(parser, PREC_OR);
+}
+
+static void expressionStatement(Parser* parser) {
+	// parse one primary expression and check for declaration or assignment
+	// if not, then parse as a normal expression statement
+	if (match(parser, TOKEN_IDENTIFIER)) {
+		switch (parser->current.type) {
+		case TOKEN_COLON_COLON:
+		{
+			uint8_t arg = identifierConstant(parser, &parser->previous);
+			advance(parser);	// accept ::
+			expression(parser);
+			defineVariable(parser, arg, true);
+			break;
+		}
+		case TOKEN_COLON_EQUAL:
+		{
+			uint8_t arg = identifierConstant(parser, &parser->previous);
+			advance(parser);	// accept :=
+			expression(parser);
+			defineVariable(parser, arg, false);
+			break;
+		}
+		case TOKEN_EQUAL:
+		case TOKEN_PLUS_EQUAL:
+		case TOKEN_MINUS_EQUAL:
+		case TOKEN_STAR_EQUAL:
+		case TOKEN_SLASH_EQUAL: {
+			// assignment
+			uint8_t arg = identifierConstant(parser, &parser->previous);
+
+			uint8_t op = OP_SET_GLOBAL;
+			switch (parser->current.type) {
+			case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
+			case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
+			case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
+			case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
+			}
+
+			advance(parser);	// accept = += -= *= /=
+			expression(parser);
+			emitBytes(parser, op, arg);
+			break;
+		}
+		default:
+			// not an assignment, continue parsing the expression
+			expressionFromPrevious(parser);
+			emitByte(parser, OP_POP);
+			break;
+		}
+	}
+	else {
+		expression(parser);
+		emitByte(parser, OP_POP);
+	}
+}
+
+static void synchronize(Parser* parser) {
+	parser->panicMode = false;
+
+	while (parser->current.type != TOKEN_EOF) {
+		switch (parser->previous.type) {
+		case TOKEN_CLASS_END:
+		case TOKEN_FN_END:
+		case TOKEN_FOR_END:
+		case TOKEN_IF_END:
+		case TOKEN_SEMICOLON:
+			return;
+		}
+
+		switch (parser->current.type) {
+		case TOKEN_CLASS:
+		case TOKEN_FN:
+		case TOKEN_FOR:
+		case TOKEN_IF:
+		case TOKEN_RETURN:
+			return;
+		}
+
+		advance(parser);
+	}
+}
+
+static void statement(Parser* parser) {
+	if (match(parser, TOKEN_SEMICOLON)) {
+		// empty statement
+	}
+	else {
+		expressionStatement(parser);
+	}
+
+	if (parser->panicMode) synchronize(parser);
 }
 
 bool compile(VM* vm, const char* source, Chunk* chunk) {
@@ -281,8 +408,10 @@ bool compile(VM* vm, const char* source, Chunk* chunk) {
 	parser.panicMode = false;
 
 	advance(&parser);
-	expression(&parser);
-	consume(&parser, TOKEN_EOF, "Expect end of expression.");
+
+	while (!match(&parser, TOKEN_EOF)) {
+		statement(&parser);
+	}
 
 	endCompiler(&parser);
 	return !parser.hadError;

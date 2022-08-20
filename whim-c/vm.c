@@ -29,10 +29,12 @@ static void runtimeError(VM* vm, const char* format, ...) {
 void initVM(VM* vm) {
 	resetStack(vm);
 	vm->objects = NULL;
+	initTable(&vm->globals);
 	initTable(&vm->strings);
 }
 
 void freeVM(VM* vm) {
+	freeTable(&vm->globals);
 	freeTable(&vm->strings);
 	freeObjects(vm);
 }
@@ -69,9 +71,23 @@ static void concatenate(VM* vm) {
 	push(vm, OBJ_VAL(result));
 }
 
+static ObjString* concatValue(VM* vm, ObjString* a) {
+	ObjString* b = AS_STRING(pop(vm));
+
+	int length = a->length + b->length;
+	char* chars = ALLOCATE(char, length + 1);
+	memcpy(chars, a->chars, a->length);
+	memcpy(chars + a->length, b->chars, b->length);
+	chars[length] = '\0';
+
+	ObjString* result = takeString(vm, chars, length);
+	return result;
+}
+
 static InterpretResult run(VM* vm) {
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op) \
 	do { \
 		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
@@ -81,6 +97,20 @@ static InterpretResult run(VM* vm) {
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
 		push(vm, valueType(a op b)); \
+	} while (false)
+#define SHORT_OP_ASSIGN(op) \
+	do { \
+		ObjString* name = READ_STRING(); \
+		Entry* entry = tableGetEntry(&vm->globals, name); \
+		if (entry->key == NULL) { \
+			runtimeError(vm, "Undefined variable '%s'.", name->chars); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		if (!IS_NUMBER(entry->value) || !IS_NUMBER(peek(vm, 0))) { \
+			runtimeError(vm, "Operands must be numbers."); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		AS_NUMBER(entry->value) op AS_NUMBER(pop(vm)); \
 	} while (false)
 
 	for (;;) {
@@ -107,6 +137,69 @@ static InterpretResult run(VM* vm) {
 		case OP_NIL: push(vm, NIL_VAL); break;
 		case OP_TRUE: push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE: push(vm, BOOL_VAL(false)); break;
+		case OP_POP: pop(vm); break;
+		case OP_DEFINE_GLOBAL_CONST: {
+			// todo - const
+			ObjString* name = READ_STRING();
+			if (!tableAdd(&vm->globals, name, peek(vm, 0))) {
+				runtimeError(vm, "Global '%s' already exists.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			pop(vm);
+			break;
+		}
+		case OP_DEFINE_GLOBAL_VAR: {
+			ObjString* name = READ_STRING();
+			if (!tableAdd(&vm->globals, name, peek(vm, 0))) {
+				runtimeError(vm, "Global '%s' already exists.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			pop(vm);
+			break;
+		}
+		case OP_GET_GLOBAL: {
+			ObjString* name = READ_STRING();
+			Value value;
+			if (!tableGet(&vm->globals, name, &value)) {
+				runtimeError(vm, "Undefined variable '%s'.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			push(vm, value);
+			break;
+		}
+		case OP_SET_GLOBAL: {
+			ObjString* name = READ_STRING();
+			bool constant = false;
+			if (tableSet(&vm->globals, name, peek(vm, 0))) {
+				tableDelete(&vm->globals, name);
+				runtimeError(vm, "Undefined variable '%s'.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			pop(vm);
+			break;
+		}
+		case OP_ADD_SET_GLOBAL: {
+			ObjString* name = READ_STRING();
+			Entry* entry = tableGetEntry(&vm->globals, name);
+			if (entry->key == NULL) {
+				runtimeError(vm, "Undefined variable '%s'.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (IS_NUMBER(entry->value) && IS_NUMBER(peek(vm, 0))) {
+				AS_NUMBER(entry->value) += AS_NUMBER(pop(vm));
+			}
+			else if (IS_STRING(entry->value) && IS_STRING(peek(vm, 0))) {
+				AS_STRING(entry->value) = concatValue(vm, AS_STRING(entry->value));
+			}
+			else {
+				runtimeError(vm, "Operands must both be numbers or strings.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_SUBTRACT_SET_GLOBAL:	SHORT_OP_ASSIGN(-= ); break;
+		case OP_MULTIPLY_SET_GLOBAL:	SHORT_OP_ASSIGN(*= ); break;
+		case OP_DIVIDE_SET_GLOBAL:		SHORT_OP_ASSIGN(/= ); break;
 		case OP_EQUAL: {
 			Value b = pop(vm);
 			Value a = pop(vm);
@@ -152,8 +245,7 @@ static InterpretResult run(VM* vm) {
 			push(vm, BOOL_VAL(isFalsey(pop(vm))));
 			break;
 		case OP_RETURN: {
-			printValue(pop(vm));
-			printf("\n");
+			// exit interpreter
 			return INTERPRET_OK;
 		}
 		}
@@ -161,7 +253,9 @@ static InterpretResult run(VM* vm) {
 
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_STRING
 #undef BINARY_OP
+#undef SHORT_OP_ASSIGN
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

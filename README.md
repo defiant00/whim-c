@@ -141,7 +141,8 @@ compiled: *.whir
 * escaped characters in strings
 * strings - flexible array members
 * support other key types for hash tables
-* string hash set for interning?
+* string hash set (instead of table with nil values) for interning?
 * utf8
 * add synchronization points for new keywords like break and continue
-* don't allow global variable redefinition
+* don't allow assignment to constants
+* constant deduplication

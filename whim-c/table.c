@@ -54,6 +54,10 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
 	return true;
 }
 
+Entry* tableGetEntry(Table* table, ObjString* key) {
+	return findEntry(table->entries, table->capacity, key);
+}
+
 static void adjustCapacity(Table* table, int capacity) {
 	Entry* entries = ALLOCATE(Entry, capacity);
 	for (int i = 0; i < capacity; i++) {
@@ -90,6 +94,25 @@ bool tableSet(Table* table, ObjString* key, Value value) {
 
 	entry->key = key;
 	entry->value = value;
+	return isNewKey;
+}
+
+// adds an item if it doesn't already exist, and returns whether the add succeeded
+bool tableAdd(Table* table, ObjString* key, Value value) {
+	if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
+		int capacity = GROW_CAPACITY(table->capacity);
+		adjustCapacity(table, capacity);
+	}
+
+	Entry* entry = findEntry(table->entries, table->capacity, key);
+	bool isNewKey = entry->key == NULL;
+	if (isNewKey) {
+		// only increment if it's a new key and not a tombstone
+		if (IS_NIL(entry->value)) table->count++;
+		entry->key = key;
+		entry->value = value;
+	}
+	
 	return isNewKey;
 }
 

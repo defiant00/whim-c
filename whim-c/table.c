@@ -54,8 +54,14 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
 	return true;
 }
 
-Entry* tableGetEntry(Table* table, ObjString* key) {
-	return findEntry(table->entries, table->capacity, key);
+bool tableGetPtr(Table* table, ObjString* key, Value** value) {
+	if (table->count == 0) return false;
+
+	Entry* entry = findEntry(table->entries, table->capacity, key);
+	if (entry->key == NULL) return false;
+
+	*value = &entry->value;
+	return true;
 }
 
 static void adjustCapacity(Table* table, int capacity) {

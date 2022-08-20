@@ -101,16 +101,16 @@ static InterpretResult run(VM* vm) {
 #define SHORT_OP_ASSIGN(op) \
 	do { \
 		ObjString* name = READ_STRING(); \
-		Entry* entry = tableGetEntry(&vm->globals, name); \
-		if (entry->key == NULL) { \
+		Value* value; \
+		if (!tableGetPtr(&vm->globals, name, &value)) { \
 			runtimeError(vm, "Undefined variable '%s'.", name->chars); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
-		if (!IS_NUMBER(entry->value) || !IS_NUMBER(peek(vm, 0))) { \
+		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
 			runtimeError(vm, "Operands must be numbers."); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
-		AS_NUMBER(entry->value) op AS_NUMBER(pop(vm)); \
+		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
 	} while (false)
 
 	for (;;) {
@@ -180,16 +180,16 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_ADD_SET_GLOBAL: {
 			ObjString* name = READ_STRING();
-			Entry* entry = tableGetEntry(&vm->globals, name);
-			if (entry->key == NULL) {
+			Value* value;
+			if (!tableGetPtr(&vm->globals, name, &value)) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			if (IS_NUMBER(entry->value) && IS_NUMBER(peek(vm, 0))) {
-				AS_NUMBER(entry->value) += AS_NUMBER(pop(vm));
+			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
+				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
 			}
-			else if (IS_STRING(entry->value) && IS_STRING(peek(vm, 0))) {
-				AS_STRING(entry->value) = concatValue(vm, AS_STRING(entry->value));
+			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
+				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
 			}
 			else {
 				runtimeError(vm, "Operands must both be numbers or strings.");

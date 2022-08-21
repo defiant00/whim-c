@@ -144,5 +144,4 @@ compiled: *.whir
 * string hash set (instead of table with nil values) for interning?
 * utf8
 * add synchronization points for new keywords like break and continue
-* don't allow assignment to constants
 * constant deduplication

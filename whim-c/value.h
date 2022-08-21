@@ -11,6 +11,8 @@ typedef enum {
 	VAL_NIL,
 	VAL_NUMBER,
 	VAL_OBJ,
+	VAL_TYPE_MASK = 7,	// must be one less than a power of 2
+	VAL_CONSTANT,
 } ValueType;
 
 typedef struct {
@@ -22,10 +24,14 @@ typedef struct {
 	} as;
 } Value;
 
-#define IS_BOOL(value)		((value).type == VAL_BOOL)
-#define IS_NIL(value)		((value).type == VAL_NIL)
-#define IS_NUMBER(value)	((value).type == VAL_NUMBER)
-#define IS_OBJ(value)		((value).type == VAL_OBJ)
+#define VAL_TYPE(value)		((value).type & VAL_TYPE_MASK)
+#define IS_CONSTANT(value)	((value).type & VAL_CONSTANT)
+#define AS_CONSTANT(value)	asConstant(value)
+
+#define IS_BOOL(value)		(VAL_TYPE(value) == VAL_BOOL)
+#define IS_NIL(value)		(VAL_TYPE(value) == VAL_NIL)
+#define IS_NUMBER(value)	(VAL_TYPE(value) == VAL_NUMBER)
+#define IS_OBJ(value)		(VAL_TYPE(value) == VAL_OBJ)
 
 #define AS_OBJ(value)		((value).as.obj)
 #define AS_BOOL(value)		((value).as.boolean)
@@ -35,6 +41,11 @@ typedef struct {
 #define NIL_VAL				((Value){VAL_NIL, {.number = 0}})
 #define NUMBER_VAL(value)	((Value){VAL_NUMBER, {.number = value}})
 #define OBJ_VAL(object)		((Value){VAL_OBJ, {.obj = (Obj*)object}})
+
+static inline Value asConstant(Value value) {
+	value.type |= VAL_CONSTANT;
+	return value;
+}
 
 typedef struct {
 	int capacity;

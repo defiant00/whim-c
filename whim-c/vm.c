@@ -98,12 +98,16 @@ static InterpretResult run(VM* vm) {
 		double a = AS_NUMBER(pop(vm)); \
 		push(vm, valueType(a op b)); \
 	} while (false)
-#define SHORT_OP_ASSIGN(op) \
+#define NUM_OP_ASSIGN(op) \
 	do { \
 		ObjString* name = READ_STRING(); \
 		Value* value; \
 		if (!tableGetPtr(&vm->globals, name, &value)) { \
 			runtimeError(vm, "Undefined variable '%s'.", name->chars); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		if (IS_CONSTANT(*value)) { \
+			runtimeError(vm, "Global '%s' is constant.", name->chars); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
 		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
@@ -139,9 +143,8 @@ static InterpretResult run(VM* vm) {
 		case OP_FALSE: push(vm, BOOL_VAL(false)); break;
 		case OP_POP: pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
-			// todo - const
 			ObjString* name = READ_STRING();
-			if (!tableAdd(&vm->globals, name, peek(vm, 0))) {
+			if (!tableAdd(&vm->globals, name, AS_CONSTANT(peek(vm, 0)))) {
 				runtimeError(vm, "Global '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -169,13 +172,16 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_SET_GLOBAL: {
 			ObjString* name = READ_STRING();
-			bool constant = false;
-			if (tableSet(&vm->globals, name, peek(vm, 0))) {
-				tableDelete(&vm->globals, name);
+			Value* value;
+			if (!tableGetPtr(&vm->globals, name, &value)) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			pop(vm);
+			if (IS_CONSTANT(*value)) {
+				runtimeError(vm, "Global '%s' is constant.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			*value = pop(vm);
 			break;
 		}
 		case OP_ADD_SET_GLOBAL: {
@@ -183,6 +189,10 @@ static InterpretResult run(VM* vm) {
 			Value* value;
 			if (!tableGetPtr(&vm->globals, name, &value)) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (IS_CONSTANT(*value)) {
+				runtimeError(vm, "Global '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
@@ -197,9 +207,9 @@ static InterpretResult run(VM* vm) {
 			}
 			break;
 		}
-		case OP_SUBTRACT_SET_GLOBAL:	SHORT_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_GLOBAL:	SHORT_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_GLOBAL:		SHORT_OP_ASSIGN(/= ); break;
+		case OP_SUBTRACT_SET_GLOBAL:	NUM_OP_ASSIGN(-= ); break;
+		case OP_MULTIPLY_SET_GLOBAL:	NUM_OP_ASSIGN(*= ); break;
+		case OP_DIVIDE_SET_GLOBAL:		NUM_OP_ASSIGN(/= ); break;
 		case OP_EQUAL: {
 			Value b = pop(vm);
 			Value a = pop(vm);
@@ -255,7 +265,7 @@ static InterpretResult run(VM* vm) {
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
-#undef SHORT_OP_ASSIGN
+#undef NUM_OP_ASSIGN
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

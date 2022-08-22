@@ -142,5 +142,4 @@ compiled: *.whir
 * support other key types for hash tables
 * string hash set (instead of table with nil values) for interning?
 * utf8
-* add synchronization points for new keywords like break and continue
 * constant deduplication

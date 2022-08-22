@@ -255,7 +255,9 @@ ParseRule rules[] = {
 	[TOKEN_STRING] = {			string,		NULL,		PREC_NONE},
 	[TOKEN_NUMBER] = {			number,		NULL,		PREC_NONE},
 	[TOKEN_AND] = {				NULL,		NULL,		PREC_NONE},
+	[TOKEN_BREAK] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS] = {			NULL,		NULL,		PREC_NONE},
+	[TOKEN_CONTINUE] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_ELSE] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_FALSE] = {			literal,	NULL,		PREC_NONE},
 	[TOKEN_FN] = {				NULL,		NULL,		PREC_NONE},
@@ -380,7 +382,9 @@ static void synchronize(Parser* parser) {
 		}
 
 		switch (parser->current.type) {
+		case TOKEN_BREAK:
 		case TOKEN_CLASS:
+		case TOKEN_CONTINUE:
 		case TOKEN_FN:
 		case TOKEN_FOR:
 		case TOKEN_IF:

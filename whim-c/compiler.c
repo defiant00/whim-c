@@ -258,6 +258,7 @@ ParseRule rules[] = {
 	[TOKEN_BREAK] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CONTINUE] = {		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DO] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_ELSE] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_FALSE] = {			literal,	NULL,		PREC_NONE},
 	[TOKEN_FN] = {				NULL,		NULL,		PREC_NONE},
@@ -271,6 +272,7 @@ ParseRule rules[] = {
 	[TOKEN_RETURN] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_TRUE] = {			literal,	NULL,		PREC_NONE},
 	[TOKEN_CLASS_END] = {		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DO_END] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_FN_END] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_FOR_END] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_IF_END] = {			NULL,		NULL,		PREC_NONE},
@@ -374,6 +376,7 @@ static void synchronize(Parser* parser) {
 	while (parser->current.type != TOKEN_EOF) {
 		switch (parser->previous.type) {
 		case TOKEN_CLASS_END:
+		case TOKEN_DO_END:
 		case TOKEN_FN_END:
 		case TOKEN_FOR_END:
 		case TOKEN_IF_END:
@@ -385,6 +388,7 @@ static void synchronize(Parser* parser) {
 		case TOKEN_BREAK:
 		case TOKEN_CLASS:
 		case TOKEN_CONTINUE:
+		case TOKEN_DO:
 		case TOKEN_FN:
 		case TOKEN_FOR:
 		case TOKEN_IF:

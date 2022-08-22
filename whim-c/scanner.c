@@ -123,6 +123,7 @@ static TokenType identifierType(Scanner* scanner) {
 			}
 		}
 		break;
+	case 'd': return checkKeyword(scanner, 1, 1, "o", TOKEN_DO);
 	case 'e': return checkKeyword(scanner, 1, 3, "lse", TOKEN_ELSE);
 	case 'f':
 		if (scanner->current - scanner->start > 1) {
@@ -239,6 +240,12 @@ Token scanToken(Scanner* scanner) {
 					!isAlphaOrDigit(scanner->current[5])) {
 					advanceMulti(scanner, 5);
 					return makeToken(scanner, TOKEN_CLASS_END);
+				}
+				return makeToken(scanner, TOKEN_SLASH);
+			case 'd':
+				if (scanner->current[1] == 'o' && !isAlphaOrDigit(scanner->current[2])) {
+					advanceMulti(scanner, 2);
+					return makeToken(scanner, TOKEN_DO_END);
 				}
 				return makeToken(scanner, TOKEN_SLASH);
 			case 'f':

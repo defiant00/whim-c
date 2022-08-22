@@ -30,7 +30,7 @@ typedef enum {
 	PREC_EQUALITY,		// == !=
 	PREC_COMPARISON,	// < > <= >=
 	PREC_TERM,			// + -
-	PREC_FACTOR,		// * /
+	PREC_FACTOR,		// * / %
 	PREC_UNARY,			// ! -
 	PREC_CALL,			// . () []
 	PREC_PRIMARY,
@@ -167,6 +167,7 @@ static void binary(Parser* parser) {
 	case TOKEN_MINUS:			emitByte(parser, OP_SUBTRACT); break;
 	case TOKEN_STAR:			emitByte(parser, OP_MULTIPLY); break;
 	case TOKEN_SLASH:			emitByte(parser, OP_DIVIDE); break;
+	case TOKEN_PERCENT:			emitByte(parser, OP_MODULUS); break;
 	default: return; // unreachable
 	}
 }
@@ -246,6 +247,8 @@ ParseRule rules[] = {
 	[TOKEN_SLASH_EQUAL] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_STAR] = {			NULL,		binary,		PREC_FACTOR},
 	[TOKEN_STAR_EQUAL] = {		NULL,		NULL,		PREC_NONE},
+	[TOKEN_PERCENT] = {			NULL,		binary,		PREC_FACTOR},
+	[TOKEN_PERCENT_EQUAL] = {	NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_COLON] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IDENTIFIER] = {		variable,	NULL,		PREC_NONE},
@@ -331,7 +334,8 @@ static void expressionStatement(Parser* parser) {
 		case TOKEN_PLUS_EQUAL:
 		case TOKEN_MINUS_EQUAL:
 		case TOKEN_STAR_EQUAL:
-		case TOKEN_SLASH_EQUAL: {
+		case TOKEN_SLASH_EQUAL:
+		case TOKEN_PERCENT_EQUAL: {
 			// assignment
 			uint8_t arg = identifierConstant(parser, &parser->previous);
 
@@ -341,9 +345,10 @@ static void expressionStatement(Parser* parser) {
 			case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
 			case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
 			case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
+			case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_GLOBAL; break;
 			}
 
-			advance(parser);	// accept = += -= *= /=
+			advance(parser);	// accept = += -= *= /= %=
 			expression(parser);
 			emitBytes(parser, op, arg);
 			break;

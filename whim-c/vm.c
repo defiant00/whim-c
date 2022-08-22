@@ -210,6 +210,24 @@ static InterpretResult run(VM* vm) {
 		case OP_SUBTRACT_SET_GLOBAL:	NUM_OP_ASSIGN(-= ); break;
 		case OP_MULTIPLY_SET_GLOBAL:	NUM_OP_ASSIGN(*= ); break;
 		case OP_DIVIDE_SET_GLOBAL:		NUM_OP_ASSIGN(/= ); break;
+		case OP_MODULUS_SET_GLOBAL: {
+			ObjString* name = READ_STRING();
+			Value* value;
+			if (!tableGetPtr(&vm->globals, name, &value)) {
+				runtimeError(vm, "Undefined variable '%s'.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (IS_CONSTANT(*value)) {
+				runtimeError(vm, "Global '%s' is constant.", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
+				runtimeError(vm, "Operands must be numbers.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
+			break;
+		}
 		case OP_EQUAL: {
 			Value b = pop(vm);
 			Value a = pop(vm);
@@ -244,6 +262,16 @@ static InterpretResult run(VM* vm) {
 		case OP_SUBTRACT:		BINARY_OP(NUMBER_VAL, -); break;
 		case OP_MULTIPLY:		BINARY_OP(NUMBER_VAL, *); break;
 		case OP_DIVIDE:			BINARY_OP(NUMBER_VAL, / ); break;
+		case OP_MODULUS: {
+			if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+				runtimeError(vm, "Operands must be numbers.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			int64_t b = (int64_t)AS_NUMBER(pop(vm));
+			int64_t a = (int64_t)AS_NUMBER(pop(vm));
+			push(vm, NUMBER_VAL((double)(a % b)));
+			break;
+		}
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(vm, 0))) {
 				runtimeError(vm, "Operand must be a number.");

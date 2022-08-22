@@ -50,6 +50,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_SUBTRACT_SET_GLOBAL:	return constantInstruction("sub set global", chunk, offset);
 	case OP_MULTIPLY_SET_GLOBAL:	return constantInstruction("mul set global", chunk, offset);
 	case OP_DIVIDE_SET_GLOBAL:		return constantInstruction("div set global", chunk, offset);
+	case OP_MODULUS_SET_GLOBAL:		return constantInstruction("mod set global", chunk, offset);
 	case OP_EQUAL:					return simpleInstruction("equal", offset);
 	case OP_NOT_EQUAL:				return simpleInstruction("not equal", offset);
 	case OP_GREATER:				return simpleInstruction("greater", offset);
@@ -60,6 +61,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_SUBTRACT:				return simpleInstruction("subtract", offset);
 	case OP_MULTIPLY:				return simpleInstruction("multiply", offset);
 	case OP_DIVIDE:					return simpleInstruction("divide", offset);
+	case OP_MODULUS:				return simpleInstruction("modulus", offset);
 	case OP_NEGATE:					return simpleInstruction("negate", offset);
 	case OP_NOT:					return simpleInstruction("not", offset);
 	case OP_RETURN:					return simpleInstruction("return", offset);

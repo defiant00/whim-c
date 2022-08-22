@@ -133,7 +133,6 @@ compiled: *.whir
 
 ## TODO
 
-* mod op
 * better line number encoding
 * \> 256 constants
 * error handling

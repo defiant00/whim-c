@@ -86,15 +86,27 @@ MyClass : class is Parent     // optional inheritance
     return self.x + self.y
   /fn
 
-  // function
-  myFunc : fn(z)
+  // everything in a class is a declaration, so variables use =
+  var = 3
+
+  // functions can be mutable as well
+  myFunc = fn(z)
     return z * z
   /fn
+
+  // same with classes, which can also be nested
+  NestedClass = class
+  /class
 /class
 
 // initialization is just the class used as a function,
 // this automatically creates a new instance and passes it in as the first argument
 myInst : MyClass(1, 2)
+
+// a class is a map with a few specific values defined
+// name - the name of the type
+// base - optional base class
+// new  - optional constructor
 
 // lists are resizable indexable collections of any type
 // indexes start at 0
@@ -124,13 +136,13 @@ a
 // class      Class         class
 // ---------  ---------
 // list       List          []
-// map        Map           [key = val]
+// map        Map           [key : const, key = var, 'string key' : val]
 
-// Operators: + - * / % ! == != and or = += -= *= /= %= is
+// Operators: + - * / % ! == != and or : := = += -= *= /= %= is
 
 // no implicit string conversion
 val := 3 + someStr.num()
-message := "Value is " + val.str()
+message : "Value is " + val.str()
 ```
 
 text: *.whim  

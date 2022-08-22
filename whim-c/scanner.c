@@ -115,7 +115,7 @@ static TokenType identifierType(Scanner* scanner) {
 		break;
 	case 'a': return checkKeyword(scanner, 1, 2, "nd", TOKEN_AND);
 	case 'b': return checkKeyword(scanner, 1, 4, "reak", TOKEN_BREAK);
-	case 'c': 
+	case 'c':
 		if (scanner->current - scanner->start > 1) {
 			switch (scanner->start[1]) {
 			case 'l': return checkKeyword(scanner, 2, 3, "ass", TOKEN_CLASS);
@@ -211,13 +211,28 @@ Token scanToken(Scanner* scanner) {
 		case ',': return makeToken(scanner, TOKEN_COMMA);
 		case '.': return makeToken(scanner, TOKEN_DOT);
 		case ';': return makeToken(scanner, TOKEN_SEMICOLON);
+		case ':': return makeToken(scanner, match(scanner, '=') ? TOKEN_COLON_EQUAL : TOKEN_COLON);
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': return makeToken(scanner, match(scanner, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
 		case '>': return makeToken(scanner, match(scanner, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
-		case '-': return makeToken(scanner, match(scanner, '=') ? TOKEN_MINUS_EQUAL : TOKEN_MINUS);
 		case '+': return makeToken(scanner, match(scanner, '=') ? TOKEN_PLUS_EQUAL : TOKEN_PLUS);
+		case '-': return makeToken(scanner, match(scanner, '=') ? TOKEN_MINUS_EQUAL : TOKEN_MINUS);
 		case '%': return makeToken(scanner, match(scanner, '=') ? TOKEN_PERCENT_EQUAL : TOKEN_PERCENT);
+		case '*':
+			switch (peek(scanner))
+			{
+			case '=':
+				advance(scanner);
+				return makeToken(scanner, TOKEN_STAR_EQUAL);
+			case '/':
+				advance(scanner);
+				resetLength(scanner);
+				break;
+			default:
+				return makeToken(scanner, TOKEN_STAR);
+			}
+			break;
 		case '/':
 			switch (peek(scanner)) {
 			case '=':
@@ -272,33 +287,6 @@ Token scanToken(Scanner* scanner) {
 				return makeToken(scanner, TOKEN_SLASH);
 			default:
 				return makeToken(scanner, TOKEN_SLASH);
-			}
-			break;
-		case '*':
-			switch (peek(scanner))
-			{
-			case '=':
-				advance(scanner);
-				return makeToken(scanner, TOKEN_STAR_EQUAL);
-			case '/':
-				advance(scanner);
-				resetLength(scanner);
-				break;
-			default:
-				return makeToken(scanner, TOKEN_STAR);
-			}
-			break;
-		case ':':
-			switch (peek(scanner))
-			{
-			case '=':
-				advance(scanner);
-				return makeToken(scanner, TOKEN_COLON_EQUAL);
-			case ':':
-				advance(scanner);
-				return makeToken(scanner, TOKEN_COLON_COLON);
-			default:
-				return errorToken(scanner, "Unexpected character.");
 			}
 			break;
 		case '\'':

@@ -118,6 +118,7 @@ static TokenType identifierType(Scanner* scanner) {
 	case 'c':
 		if (scanner->current - scanner->start > 1) {
 			switch (scanner->start[1]) {
+			case 'a': return checkKeyword(scanner, 2, 3, "tch", TOKEN_CATCH);
 			case 'l': return checkKeyword(scanner, 2, 3, "ass", TOKEN_CLASS);
 			case 'o': return checkKeyword(scanner, 2, 6, "ntinue", TOKEN_CONTINUE);
 			}
@@ -130,6 +131,7 @@ static TokenType identifierType(Scanner* scanner) {
 			switch (scanner->start[1])
 			{
 			case 'a': return checkKeyword(scanner, 2, 3, "lse", TOKEN_FALSE);
+			case 'i': return checkKeyword(scanner, 2, 5, "nally", TOKEN_FINALLY);
 			case 'n': if (scanner->current - scanner->start == 2) return TOKEN_FN;
 			case 'o': return checkKeyword(scanner, 2, 1, "r", TOKEN_FOR);
 			case 'r': return checkKeyword(scanner, 2, 2, "om", TOKEN_FROM);
@@ -148,7 +150,20 @@ static TokenType identifierType(Scanner* scanner) {
 	case 'n': return checkKeyword(scanner, 1, 2, "il", TOKEN_NIL);
 	case 'o': return checkKeyword(scanner, 1, 1, "r", TOKEN_OR);
 	case 'r': return checkKeyword(scanner, 1, 5, "eturn", TOKEN_RETURN);
-	case 't': return checkKeyword(scanner, 1, 3, "rue", TOKEN_TRUE);
+	case 't':
+		if (scanner->current - scanner->start > 1) {
+			switch (scanner->start[1]) {
+			case 'h': return checkKeyword(scanner, 2, 3, "row", TOKEN_THROW);
+			case 'r':
+				if (scanner->current - scanner->start > 2) {
+					switch (scanner->start[2]) {
+					case 'u': return checkKeyword(scanner, 3, 1, "e", TOKEN_TRUE);
+					case 'y': if (scanner->current - scanner->start == 3) return TOKEN_TRY;
+					}
+				}
+			}
+		}
+		break;
 	}
 	return TOKEN_IDENTIFIER;
 }
@@ -293,6 +308,14 @@ Token scanToken(Scanner* scanner) {
 				if (scanner->current[1] == 'f' && !isAlphaOrDigit(scanner->current[2])) {
 					advanceMulti(scanner, 2);
 					return makeToken(scanner, TOKEN_IF_END);
+				}
+				return makeToken(scanner, TOKEN_SLASH);
+			case 't':
+				if (scanner->current[1] == 'r' &&
+					scanner->current[2] == 'y' &&
+					!isAlphaOrDigit(scanner->current[3])) {
+					advanceMulti(scanner, 3);
+					return makeToken(scanner, TOKEN_TRY_END);
 				}
 				return makeToken(scanner, TOKEN_SLASH);
 			default:

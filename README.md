@@ -18,7 +18,7 @@ C implementation based on [Crafting Interpreters](http://craftinginterpreters.co
 */
 
 // constant and variable declarations
-myConstant : "hello"
+myConstant :: "hello"
 myVariable := "initialized"
 
 // variables must be declared before use, assignment or other usage without declaration is an error
@@ -50,13 +50,13 @@ do
 /do
 
 // import modules with use - the module is returned, so assign it to a variable or constant
-std : use Some.Standard.Library
+std :: use Some.Standard.Library
 
 // or maybe with a function?
-lib : std.import(Some.Standard.Library)
+lib :: std.import(Some.Standard.Library)
 
 // function
-myFunc : fn(x, y, z)
+myFunc :: fn(x, y, z)
 /fn
 
 // all functions are static and require an explicit self
@@ -70,11 +70,11 @@ func(first, second)
 // blocks end with /block, eg /fn, /if, /for
 
 // class
-MyClass : class is Parent     // optional inheritance
+MyClass :: class is Parent      // optional inheritance
   // items here are scoped to the class
 
   // constructor
-  new : fn(self, x, y)
+  new :: fn(self, x, y)
     self.base(x, y)       // call the base type constructor, passing in self (by using self.)
                           // so it does not create a new object
     self.x := x
@@ -82,26 +82,34 @@ MyClass : class is Parent     // optional inheritance
   /fn
 
   // method
-  myMethod : fn(self)       // self is a convention, not a requirement
+  myMethod :: fn(self)      // self is a convention, not a requirement
     return self.x + self.y
   /fn
 
-  // everything in a class is a declaration, so variables use =
-  var = 3
+  // static variable
+  var := 3
 
   // functions can be mutable as well
-  myFunc = fn(z)
+  myFunc := fn(z)
     return z * z
   /fn
 
   // same with classes, which can also be nested
-  NestedClass = class
+  NestedClass := class
   /class
+
+  // can also use strings as keys
+  'something' :: 42
+
+  // operator overloading is done with strings
+  "+" :: fn(a, b)
+    return MyClass(a.x + b.x, a.y + b.y)
+  /fn
 /class
 
 // initialization is just the class used as a function,
 // this automatically creates a new instance and passes it in as the first argument
-myInst : MyClass(1, 2)
+myInst :: MyClass(1, 2)
 
 // a class is a map with a few specific values defined
 // name - the name of the type
@@ -136,13 +144,13 @@ a
 // class      Class         class
 // ---------  ---------
 // list       List          []
-// map        Map           [key : const, key = var, 'string key' : val]
+// map        Map           [key :: const, key := var, 'string key' :: val]
 
-// Operators: + - * / % ! == != and or : := = += -= *= /= %= is
+// Operators: + - * / % ! == != and or :: := = += -= *= /= %= is
 
 // no implicit string conversion
 val := 3 + someStr.num()
-message : "Value is " + val.str()
+message :: "Value is " + val.str()
 ```
 
 text: *.whim  

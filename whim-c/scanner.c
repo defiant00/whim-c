@@ -211,7 +211,17 @@ Token scanToken(Scanner* scanner) {
 		case ',': return makeToken(scanner, TOKEN_COMMA);
 		case '.': return makeToken(scanner, TOKEN_DOT);
 		case ';': return makeToken(scanner, TOKEN_SEMICOLON);
-		case ':': return makeToken(scanner, match(scanner, '=') ? TOKEN_COLON_EQUAL : TOKEN_COLON);
+		case ':':
+			switch (peek(scanner))
+			{
+			case ':':
+				advance(scanner);
+				return makeToken(scanner, TOKEN_COLON_COLON);
+			case '=':
+				advance(scanner);
+				return makeToken(scanner, TOKEN_COLON_EQUAL);
+			}
+			return errorToken(scanner, "Unexpected character.");
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': return makeToken(scanner, match(scanner, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);

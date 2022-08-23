@@ -231,7 +231,7 @@ ParseRule rules[] = {
 	[TOKEN_DOT] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_SEMICOLON] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_UNDERSCORE] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_COLON] = {			NULL,		NULL,		PREC_NONE},
+	[TOKEN_COLON_COLON] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_BANG] = {			unary,		NULL,		PREC_NONE},
 	[TOKEN_BANG_EQUAL] = {		NULL,		binary,		PREC_EQUALITY},
@@ -318,10 +318,10 @@ static void expressionStatement(Parser* parser) {
 	// if not, then parse as a normal expression statement
 	if (match(parser, TOKEN_IDENTIFIER)) {
 		switch (parser->current.type) {
-		case TOKEN_COLON:
+		case TOKEN_COLON_COLON:
 		{
 			uint8_t arg = identifierConstant(parser, &parser->previous);
-			advance(parser);	// accept :
+			advance(parser);	// accept ::
 			expression(parser);
 			defineVariable(parser, arg, true);
 			break;

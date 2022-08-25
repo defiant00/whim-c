@@ -28,7 +28,7 @@ void freeValueArray(ValueArray* array) {
 }
 
 void printValue(Value value) {
-	if (IS_CONSTANT(value)) printf("`");
+	if (IS_CONST(value)) printf("`");
 		
 	switch (VAL_TYPE(value)) {
 	case VAL_BOOL: printf(AS_BOOL(value) ? "true" : "false"); break;

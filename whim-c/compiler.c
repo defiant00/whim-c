@@ -227,8 +227,6 @@ static void declareLocal(Compiler* compiler, Token* identifier) {
 		error(compiler, "A variable with this name already exists.");
 	}
 
-	// todo - check for existing global variables with the same name
-
 	addLocal(compiler, *identifier);
 }
 
@@ -434,8 +432,7 @@ static void expressionStatement(Compiler* compiler) {
 				expression(compiler);
 				markInitialized(compiler);
 
-				// todo - const or var
-
+				emitByte(compiler, constant ? OP_MARK_CONST : OP_MARK_VAR);
 			}
 			else {
 				uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);

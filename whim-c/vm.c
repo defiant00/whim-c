@@ -98,7 +98,7 @@ static InterpretResult run(VM* vm) {
 		double a = AS_NUMBER(pop(vm)); \
 		push(vm, valueType(a op b)); \
 	} while (false)
-#define NUM_OP_ASSIGN(op) \
+#define GLOBAL_NUM_OP_ASSIGN(op) \
 	do { \
 		ObjString* name = READ_STRING(); \
 		Value* value; \
@@ -106,8 +106,22 @@ static InterpretResult run(VM* vm) {
 			runtimeError(vm, "Undefined variable '%s'.", name->chars); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
-		if (IS_CONSTANT(*value)) { \
+		if (IS_CONST(*value)) { \
 			runtimeError(vm, "Global '%s' is constant.", name->chars); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
+			runtimeError(vm, "Operands must be numbers."); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
+	} while (false)
+#define LOCAL_NUM_OP_ASSIGN(op) \
+	do { \
+		uint8_t index = READ_BYTE(); \
+		Value* value = &vm->stack[index]; \
+		if (IS_CONST(*value)) { \
+			runtimeError(vm, "Local is constant."); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
 		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
@@ -144,7 +158,7 @@ static InterpretResult run(VM* vm) {
 		case OP_POP: pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
-			if (!tableAdd(&vm->globals, name, AS_CONSTANT(peek(vm, 0)))) {
+			if (!tableAdd(&vm->globals, name, AS_CONST(peek(vm, 0)))) {
 				runtimeError(vm, "Global '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -177,7 +191,7 @@ static InterpretResult run(VM* vm) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			if (IS_CONSTANT(*value)) {
+			if (IS_CONST(*value)) {
 				runtimeError(vm, "Global '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -191,7 +205,7 @@ static InterpretResult run(VM* vm) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			if (IS_CONSTANT(*value)) {
+			if (IS_CONST(*value)) {
 				runtimeError(vm, "Global '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -207,9 +221,9 @@ static InterpretResult run(VM* vm) {
 			}
 			break;
 		}
-		case OP_SUBTRACT_SET_GLOBAL:	NUM_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_GLOBAL:	NUM_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_GLOBAL:		NUM_OP_ASSIGN(/= ); break;
+		case OP_SUBTRACT_SET_GLOBAL:	GLOBAL_NUM_OP_ASSIGN(-= ); break;
+		case OP_MULTIPLY_SET_GLOBAL:	GLOBAL_NUM_OP_ASSIGN(*= ); break;
+		case OP_DIVIDE_SET_GLOBAL:		GLOBAL_NUM_OP_ASSIGN(/= ); break;
 		case OP_MODULUS_SET_GLOBAL: {
 			ObjString* name = READ_STRING();
 			Value* value;
@@ -217,7 +231,7 @@ static InterpretResult run(VM* vm) {
 				runtimeError(vm, "Undefined variable '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			if (IS_CONSTANT(*value)) {
+			if (IS_CONST(*value)) {
 				runtimeError(vm, "Global '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -228,6 +242,12 @@ static InterpretResult run(VM* vm) {
 			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
+		case OP_MARK_CONST:
+			vm->stackTop[-1] = AS_CONST(vm->stackTop[-1]);
+			break;
+		case OP_MARK_VAR:
+			vm->stackTop[-1] = AS_VAR(vm->stackTop[-1]);
+			break;
 		case OP_GET_LOCAL: {
 			uint8_t index = READ_BYTE();
 			push(vm, vm->stack[index]);
@@ -235,7 +255,47 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
+			if (IS_CONST(vm->stack[index])) {
+				runtimeError(vm, "Local is constant.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
 			vm->stack[index] = AS_VAR(pop(vm));
+			break;
+		}
+		case OP_ADD_SET_LOCAL: {
+			uint8_t index = READ_BYTE();
+			Value* value = &vm->stack[index];
+			if (IS_CONST(*value)) {
+				runtimeError(vm, "Local is constant.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
+				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
+			}
+			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
+				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
+			}
+			else {
+				runtimeError(vm, "Operands must both be numbers or strings.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_SUBTRACT_SET_LOCAL: LOCAL_NUM_OP_ASSIGN(-= ); break;
+		case OP_MULTIPLY_SET_LOCAL: LOCAL_NUM_OP_ASSIGN(*= ); break;
+		case OP_DIVIDE_SET_LOCAL:	LOCAL_NUM_OP_ASSIGN(/= ); break;
+		case OP_MODULUS_SET_LOCAL: {
+			uint8_t index = READ_BYTE();
+			Value* value = &vm->stack[index];
+			if (IS_CONST(*value)) {
+				runtimeError(vm, "Local is constant.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
+				runtimeError(vm, "Operands must be numbers.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
 		case OP_EQUAL: {
@@ -287,10 +347,10 @@ static InterpretResult run(VM* vm) {
 				runtimeError(vm, "Operand must be a number.");
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
+			vm->stackTop[-1] = NUMBER_VAL(-AS_NUMBER(vm->stackTop[-1]));
 			break;
 		case OP_NOT:
-			push(vm, BOOL_VAL(isFalsey(pop(vm))));
+			vm->stackTop[-1] = BOOL_VAL(isFalsey(vm->stackTop[-1]));
 			break;
 		case OP_RETURN: {
 			// exit interpreter
@@ -303,7 +363,8 @@ static InterpretResult run(VM* vm) {
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
-#undef NUM_OP_ASSIGN
+#undef GLOBAL_NUM_OP_ASSIGN
+#undef LOCAL_NUM_OP_ASSIGN
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

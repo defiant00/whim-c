@@ -25,8 +25,8 @@ typedef struct {
 } Value;
 
 #define VAL_TYPE(value)		((value).type & VAL_TYPE_MASK)
-#define IS_CONSTANT(value)	((value).type & VAL_CONSTANT)
-#define AS_CONSTANT(value)	asConstant(value)
+#define IS_CONST(value)		((value).type & VAL_CONSTANT)
+#define AS_CONST(value)		asConst(value)
 #define AS_VAR(value)		asVar(value)
 
 #define IS_BOOL(value)		(VAL_TYPE(value) == VAL_BOOL)
@@ -43,7 +43,7 @@ typedef struct {
 #define NUMBER_VAL(value)	((Value){VAL_NUMBER, {.number = value}})
 #define OBJ_VAL(object)		((Value){VAL_OBJ, {.obj = (Obj*)object}})
 
-static inline Value asConstant(Value value) {
+static inline Value asConst(Value value) {
 	value.type |= VAL_CONSTANT;
 	return value;
 }

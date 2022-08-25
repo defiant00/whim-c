@@ -168,3 +168,5 @@ compiled: *.whir
 * string hash set (instead of table with nil values) for interning?
 * utf8
 * constant deduplication
+* op pop n
+* prevent local and global variables from having the same name

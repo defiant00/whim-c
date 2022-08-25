@@ -16,6 +16,12 @@ static int simpleInstruction(const char* name, int offset) {
 	return offset + 1;
 }
 
+static int byteInstruction(const char* name, Chunk* chunk, int offset) {
+	uint8_t index = chunk->code[offset + 1];
+	printf("%-16s %4d\n", name, index);
+	return offset + 2;
+}
+
 static int constantInstruction(const char* name, Chunk* chunk, int offset) {
 	uint8_t constant = chunk->code[offset + 1];
 	printf("%-16s %4d '", name, constant);
@@ -51,6 +57,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_MULTIPLY_SET_GLOBAL:	return constantInstruction("mul set global", chunk, offset);
 	case OP_DIVIDE_SET_GLOBAL:		return constantInstruction("div set global", chunk, offset);
 	case OP_MODULUS_SET_GLOBAL:		return constantInstruction("mod set global", chunk, offset);
+	case OP_GET_LOCAL:				return byteInstruction("get local", chunk, offset);
+	case OP_SET_LOCAL:				return byteInstruction("set local", chunk, offset);
+	case OP_ADD_SET_LOCAL:			return byteInstruction("add set local", chunk, offset);
+	case OP_SUBTRACT_SET_LOCAL:		return byteInstruction("sub set local", chunk, offset);
+	case OP_MULTIPLY_SET_LOCAL:		return byteInstruction("mul set local", chunk, offset);
+	case OP_DIVIDE_SET_LOCAL:		return byteInstruction("div set local", chunk, offset);
+	case OP_MODULUS_SET_LOCAL:		return byteInstruction("mod set local", chunk, offset);
 	case OP_EQUAL:					return simpleInstruction("equal", offset);
 	case OP_NOT_EQUAL:				return simpleInstruction("not equal", offset);
 	case OP_GREATER:				return simpleInstruction("greater", offset);

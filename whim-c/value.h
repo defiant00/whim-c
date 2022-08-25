@@ -27,6 +27,7 @@ typedef struct {
 #define VAL_TYPE(value)		((value).type & VAL_TYPE_MASK)
 #define IS_CONSTANT(value)	((value).type & VAL_CONSTANT)
 #define AS_CONSTANT(value)	asConstant(value)
+#define AS_VAR(value)		asVar(value)
 
 #define IS_BOOL(value)		(VAL_TYPE(value) == VAL_BOOL)
 #define IS_NIL(value)		(VAL_TYPE(value) == VAL_NIL)
@@ -44,6 +45,11 @@ typedef struct {
 
 static inline Value asConstant(Value value) {
 	value.type |= VAL_CONSTANT;
+	return value;
+}
+
+static inline Value asVar(Value value) {
+	value.type &= VAL_TYPE_MASK;
 	return value;
 }
 

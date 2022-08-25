@@ -153,7 +153,7 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_DEFINE_GLOBAL_VAR: {
 			ObjString* name = READ_STRING();
-			if (!tableAdd(&vm->globals, name, peek(vm, 0))) {
+			if (!tableAdd(&vm->globals, name, AS_VAR(peek(vm, 0)))) {
 				runtimeError(vm, "Global '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -181,7 +181,7 @@ static InterpretResult run(VM* vm) {
 				runtimeError(vm, "Global '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			*value = pop(vm);
+			*value = AS_VAR(pop(vm));
 			break;
 		}
 		case OP_ADD_SET_GLOBAL: {
@@ -226,6 +226,16 @@ static InterpretResult run(VM* vm) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
+			break;
+		}
+		case OP_GET_LOCAL: {
+			uint8_t index = READ_BYTE();
+			push(vm, vm->stack[index]);
+			break;
+		}
+		case OP_SET_LOCAL: {
+			uint8_t index = READ_BYTE();
+			vm->stack[index] = AS_VAR(pop(vm));
 			break;
 		}
 		case OP_EQUAL: {

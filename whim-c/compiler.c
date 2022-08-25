@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -163,8 +164,23 @@ static void endCompiler(Compiler* compiler) {
 	emitReturn(compiler);
 }
 
+static void beginScope(Compiler* compiler) {
+	compiler->scopeDepth++;
+}
+
+static void endScope(Compiler* compiler) {
+	compiler->scopeDepth--;
+
+	while (compiler->localCount > 0 &&
+		compiler->locals[compiler->localCount - 1].depth > compiler->scopeDepth) {
+		emitByte(compiler, OP_POP);
+		compiler->localCount--;
+	}
+}
+
 static void expression(Compiler* compiler);
 static void statement(Compiler* compiler);
+static void declaration(Compiler* compiler);
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Compiler* compiler, Precedence precedence);
 
@@ -172,7 +188,51 @@ static uint8_t identifierConstant(Compiler* compiler, Token* name) {
 	return makeConstant(compiler, OBJ_VAL(copyString(compiler->vm, name->start, name->length)));
 }
 
-static void defineVariable(Compiler* compiler, uint8_t global, bool constant) {
+static bool identifiersEqual(Token* a, Token* b) {
+	if (a->length != b->length) return false;
+	return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static int resolveLocal(Compiler* compiler, Token* identifier) {
+	for (int i = compiler->localCount - 1; i >= 0; i--) {
+		Local* local = &compiler->locals[i];
+		if (identifiersEqual(identifier, &local->name)) {
+			if (local->depth == -1) {
+				error(compiler, "Can't use local variable in its own initializer.");
+			}
+			return i;
+		}
+	}
+	return -1;
+}
+
+static void addLocal(Compiler* compiler, Token identifier) {
+	if (compiler->localCount == UINT8_COUNT) {
+		error(compiler, "Too many local variables in block.");
+		return;
+	}
+
+	Local* local = &compiler->locals[compiler->localCount++];
+	local->name = identifier;
+	local->depth = -1;
+}
+
+static void markInitialized(Compiler* compiler) {
+	compiler->locals[compiler->localCount - 1].depth = compiler->scopeDepth;
+}
+
+static void declareLocal(Compiler* compiler, Token* identifier) {
+	int arg = resolveLocal(compiler, identifier);
+	if (arg != -1) {
+		error(compiler, "A variable with this name already exists.");
+	}
+
+	// todo - check for existing global variables with the same name
+
+	addLocal(compiler, *identifier);
+}
+
+static void defineGlobal(Compiler* compiler, uint8_t global, bool constant) {
 	emitBytes(compiler, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
 }
 
@@ -224,8 +284,16 @@ static void string(Compiler* compiler) {
 }
 
 static void namedVariable(Compiler* compiler, Token name) {
-	uint8_t arg = identifierConstant(compiler, &name);
-	emitBytes(compiler, OP_GET_GLOBAL, arg);
+	uint8_t getOp;
+	int arg = resolveLocal(compiler, &name);
+	if (arg != -1) {
+		getOp = OP_GET_LOCAL;
+	}
+	else {
+		arg = identifierConstant(compiler, &name);
+		getOp = OP_GET_GLOBAL;
+	}
+	emitBytes(compiler, getOp, (uint8_t)arg);
 }
 
 static void variable(Compiler* compiler) {
@@ -343,25 +411,39 @@ static void expressionFromPrevious(Compiler* compiler) {
 	parsePrecedenceFromPrevious(compiler, PREC_OR);
 }
 
+static void block(Compiler* compiler, TokenType end, const char* missingMessage) {
+	while (!check(compiler, end) && !check(compiler, TOKEN_EOF)) {
+		declaration(compiler);
+	}
+
+	consume(compiler, end, missingMessage);
+}
+
 static void expressionStatement(Compiler* compiler) {
 	// parse one primary expression and check for declaration or assignment
 	// if not, then parse as a normal expression statement
 	if (match(compiler, TOKEN_IDENTIFIER)) {
 		switch (compiler->parser.current.type) {
 		case TOKEN_COLON_COLON:
-		{
-			uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
-			advance(compiler);	// accept ::
-			expression(compiler);
-			defineVariable(compiler, arg, true);
-			break;
-		}
-		case TOKEN_COLON_EQUAL:
-		{
-			uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
-			advance(compiler);	// accept :=
-			expression(compiler);
-			defineVariable(compiler, arg, false);
+		case TOKEN_COLON_EQUAL: {
+			bool constant = compiler->parser.current.type == TOKEN_COLON_COLON;
+
+			if (compiler->scopeDepth > 0) {
+				declareLocal(compiler, &compiler->parser.previous);
+				advance(compiler);	// accept :: :=
+				expression(compiler);
+				markInitialized(compiler);
+
+				// todo - const or var
+
+			}
+			else {
+				uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
+				advance(compiler);	// accept :: :=
+				expression(compiler);
+				defineGlobal(compiler, arg, constant);
+			}
+
 			break;
 		}
 		case TOKEN_EQUAL:
@@ -371,20 +453,34 @@ static void expressionStatement(Compiler* compiler) {
 		case TOKEN_SLASH_EQUAL:
 		case TOKEN_PERCENT_EQUAL: {
 			// assignment
-			uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
+			int arg = resolveLocal(compiler, &compiler->parser.previous);
+			uint8_t op;
+			if (arg == -1) {
+				arg = identifierConstant(compiler, &compiler->parser.previous);
 
-			uint8_t op = OP_SET_GLOBAL;
-			switch (compiler->parser.current.type) {
-			case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
-			case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
-			case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
-			case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
-			case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_GLOBAL; break;
+				op = OP_SET_GLOBAL;
+				switch (compiler->parser.current.type) {
+				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
+				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
+				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
+				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
+				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_GLOBAL; break;
+				}
+			}
+			else {
+				op = OP_SET_LOCAL;
+				switch (compiler->parser.current.type) {
+				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_LOCAL; break;
+				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_LOCAL; break;
+				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_LOCAL; break;
+				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_LOCAL; break;
+				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_LOCAL; break;
+				}
 			}
 
 			advance(compiler);	// accept = += -= *= /= %=
 			expression(compiler);
-			emitBytes(compiler, op, arg);
+			emitBytes(compiler, op, (uint8_t)arg);
 			break;
 		}
 		default:
@@ -435,26 +531,34 @@ static void synchronize(Compiler* compiler) {
 	}
 }
 
-static void statement(Compiler* compiler) {
-	if (match(compiler, TOKEN_SEMICOLON)) {
-		// empty statement
-	}
-	else {
-		expressionStatement(compiler);
-	}
+static void declaration(Compiler* compiler) {
+	statement(compiler);
 
 	if (compiler->parser.panicMode) synchronize(compiler);
 }
 
+static void statement(Compiler* compiler) {
+	if (match(compiler, TOKEN_SEMICOLON)) {
+		// empty statement
+	}
+	else if (match(compiler, TOKEN_DO)) {
+		beginScope(compiler);
+		block(compiler, TOKEN_DO_END, "Expect '/do' after block.");
+		endScope(compiler);
+	}
+	else {
+		expressionStatement(compiler);
+	}
+}
+
 bool compile(VM* vm, const char* source, Chunk* chunk) {
 	Compiler compiler;
-
 	initCompiler(&compiler, vm, source, chunk);
 
 	advance(&compiler);
 
 	while (!match(&compiler, TOKEN_EOF)) {
-		statement(&compiler);
+		declaration(&compiler);
 	}
 
 	endCompiler(&compiler);

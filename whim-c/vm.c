@@ -120,10 +120,6 @@ static InterpretResult run(VM* vm) {
 	do { \
 		uint8_t index = READ_BYTE(); \
 		Value* value = &vm->stack[index]; \
-		if (IS_CONST(*value)) { \
-			runtimeError(vm, "Local is constant."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
 		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
 			runtimeError(vm, "Operands must be numbers."); \
 			return INTERPRET_RUNTIME_ERROR; \
@@ -242,12 +238,6 @@ static InterpretResult run(VM* vm) {
 			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
-		case OP_MARK_CONST:
-			vm->stackTop[-1] = AS_CONST(vm->stackTop[-1]);
-			break;
-		case OP_MARK_VAR:
-			vm->stackTop[-1] = AS_VAR(vm->stackTop[-1]);
-			break;
 		case OP_GET_LOCAL: {
 			uint8_t index = READ_BYTE();
 			push(vm, vm->stack[index]);
@@ -255,20 +245,12 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
-			if (IS_CONST(vm->stack[index])) {
-				runtimeError(vm, "Local is constant.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			vm->stack[index] = AS_VAR(pop(vm));
+			vm->stack[index] = pop(vm);
 			break;
 		}
 		case OP_ADD_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
 			Value* value = &vm->stack[index];
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Local is constant.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
 			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
 				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
 			}
@@ -287,10 +269,6 @@ static InterpretResult run(VM* vm) {
 		case OP_MODULUS_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
 			Value* value = &vm->stack[index];
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Local is constant.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
 			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
 				runtimeError(vm, "Operands must be numbers.");
 				return INTERPRET_RUNTIME_ERROR;

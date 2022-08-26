@@ -34,6 +34,7 @@ typedef enum {
 
 typedef struct {
 	Token name;
+	bool constant;
 	int depth;
 } Local;
 
@@ -197,16 +198,13 @@ static int resolveLocal(Compiler* compiler, Token* identifier) {
 	for (int i = compiler->localCount - 1; i >= 0; i--) {
 		Local* local = &compiler->locals[i];
 		if (identifiersEqual(identifier, &local->name)) {
-			if (local->depth == -1) {
-				error(compiler, "Can't use local variable in its own initializer.");
-			}
-			return i;
+			return local->depth == -1 ? -1 : i;
 		}
 	}
 	return -1;
 }
 
-static void addLocal(Compiler* compiler, Token identifier) {
+static void addLocal(Compiler* compiler, Token identifier, bool constant) {
 	if (compiler->localCount == UINT8_COUNT) {
 		error(compiler, "Too many local variables in block.");
 		return;
@@ -214,6 +212,7 @@ static void addLocal(Compiler* compiler, Token identifier) {
 
 	Local* local = &compiler->locals[compiler->localCount++];
 	local->name = identifier;
+	local->constant = constant;
 	local->depth = -1;
 }
 
@@ -221,13 +220,13 @@ static void markInitialized(Compiler* compiler) {
 	compiler->locals[compiler->localCount - 1].depth = compiler->scopeDepth;
 }
 
-static void declareLocal(Compiler* compiler, Token* identifier) {
+static void declareLocal(Compiler* compiler, Token* identifier, bool constant) {
 	int arg = resolveLocal(compiler, identifier);
 	if (arg != -1) {
 		error(compiler, "A variable with this name already exists.");
 	}
 
-	addLocal(compiler, *identifier);
+	addLocal(compiler, *identifier, constant);
 }
 
 static void defineGlobal(Compiler* compiler, uint8_t global, bool constant) {
@@ -427,12 +426,10 @@ static void expressionStatement(Compiler* compiler) {
 			bool constant = compiler->parser.current.type == TOKEN_COLON_COLON;
 
 			if (compiler->scopeDepth > 0) {
-				declareLocal(compiler, &compiler->parser.previous);
+				declareLocal(compiler, &compiler->parser.previous, constant);
 				advance(compiler);	// accept :: :=
 				expression(compiler);
 				markInitialized(compiler);
-
-				emitByte(compiler, constant ? OP_MARK_CONST : OP_MARK_VAR);
 			}
 			else {
 				uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
@@ -453,6 +450,7 @@ static void expressionStatement(Compiler* compiler) {
 			int arg = resolveLocal(compiler, &compiler->parser.previous);
 			uint8_t op;
 			if (arg == -1) {
+				// global
 				arg = identifierConstant(compiler, &compiler->parser.previous);
 
 				op = OP_SET_GLOBAL;
@@ -465,6 +463,11 @@ static void expressionStatement(Compiler* compiler) {
 				}
 			}
 			else {
+				// local
+				if (compiler->locals[arg].constant) {
+					error(compiler, "Local is constant.");
+				}
+
 				op = OP_SET_LOCAL;
 				switch (compiler->parser.current.type) {
 				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_LOCAL; break;

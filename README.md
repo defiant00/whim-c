@@ -169,4 +169,3 @@ compiled: *.whir
 * utf8
 * constant deduplication
 * op pop n
-* prevent local and global variables from having the same name?

@@ -59,8 +59,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_MODULUS_SET_GLOBAL:		return constantInstruction("mod set global", chunk, offset);
 	case OP_GET_LOCAL:				return byteInstruction("get local", chunk, offset);
 	case OP_SET_LOCAL:				return byteInstruction("set local", chunk, offset);
-	case OP_MARK_CONST:				return simpleInstruction("mark const", offset);
-	case OP_MARK_VAR:				return simpleInstruction("mark var", offset);
 	case OP_ADD_SET_LOCAL:			return byteInstruction("add set local", chunk, offset);
 	case OP_SUBTRACT_SET_LOCAL:		return byteInstruction("sub set local", chunk, offset);
 	case OP_MULTIPLY_SET_LOCAL:		return byteInstruction("mul set local", chunk, offset);

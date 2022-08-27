@@ -174,6 +174,7 @@ compiled: *.whir
 
 ## TODO
 
+* use `from` or `is` for inheritance?
 * better line number encoding
 * \> 256 constants
 * error handling

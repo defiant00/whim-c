@@ -39,10 +39,18 @@ typedef struct {
 } Local;
 
 typedef struct {
+	int start;
+	int exit;
+	int depth;
+} Loop;
+
+typedef struct {
 	VM* vm;
 	Parser parser;
 	Local locals[UINT8_COUNT];
 	int localCount;
+	Loop loops[MAX_LOOP];
+	int loopCount;
 	int scopeDepth;
 } Compiler;
 
@@ -62,6 +70,7 @@ static void initCompiler(Compiler* compiler, VM* vm, const char* source, Chunk* 
 	compiler->vm = vm;
 
 	compiler->localCount = 0;
+	compiler->loopCount = 0;
 	compiler->scopeDepth = 0;
 
 	initScanner(&compiler->parser.scanner, source);
@@ -138,6 +147,23 @@ static void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
 	emitByte(compiler, byte2);
 }
 
+static int emitJump(Compiler* compiler, uint8_t instruction) {
+	emitByte(compiler, instruction);
+	emitByte(compiler, 0xff);
+	emitByte(compiler, 0xff);
+	return currentChunk(compiler)->count - 2;
+}
+
+static int emitLoop(Compiler* compiler, int loopStart) {
+	emitByte(compiler, OP_JUMP_BACK);
+
+	int offset = currentChunk(compiler)->count - loopStart + 2;
+	if (offset > UINT16_MAX) error(compiler, "Loop body too large.");
+
+	emitByte(compiler, (offset >> 8) & 0xff);
+	emitByte(compiler, offset & 0xff);
+}
+
 static void emitReturn(Compiler* compiler) {
 	emitByte(compiler, OP_RETURN);
 }
@@ -154,6 +180,18 @@ static uint8_t makeConstant(Compiler* compiler, Value value) {
 
 static void emitConstant(Compiler* compiler, Value value) {
 	emitBytes(compiler, OP_CONSTANT, makeConstant(compiler, value));
+}
+
+static void patchJump(Compiler* compiler, int offset) {
+	// -2 to adjust for the bytecode for the jump offset itself
+	int jump = currentChunk(compiler)->count - offset - 2;
+
+	if (jump > UINT16_MAX) {
+		error(compiler, "Too much code to jump over.");
+	}
+
+	currentChunk(compiler)->code[offset] = (jump >> 8) & 0xff;
+	currentChunk(compiler)->code[offset + 1] = jump & 0xff;
 }
 
 static void endCompiler(Compiler* compiler) {
@@ -176,6 +214,13 @@ static void endScope(Compiler* compiler) {
 		compiler->locals[compiler->localCount - 1].depth > compiler->scopeDepth) {
 		emitByte(compiler, OP_POP);
 		compiler->localCount--;
+	}
+}
+
+static void scopePop(Compiler* compiler, int depth) {
+	for (int i = compiler->localCount - 1; i >= 0; i--) {
+		if (compiler->locals[i].depth < depth) return;
+		emitByte(compiler, OP_POP);
 	}
 }
 
@@ -233,6 +278,15 @@ static void defineGlobal(Compiler* compiler, uint8_t global, bool constant) {
 	emitBytes(compiler, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
 }
 
+static void and_expr(Compiler* compiler) {
+	int endJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+
+	emitByte(compiler, OP_POP);
+	parsePrecedence(compiler, PREC_AND);
+
+	patchJump(compiler, endJump);
+}
+
 static void binary(Compiler* compiler) {
 	TokenType operatorType = compiler->parser.previous.type;
 	ParseRule* rule = getRule(operatorType);
@@ -271,6 +325,15 @@ static void grouping(Compiler* compiler) {
 static void number(Compiler* compiler) {
 	double value = strtod(compiler->parser.previous.start, NULL);
 	emitConstant(compiler, NUMBER_VAL(value));
+}
+
+static void or_expr(Compiler* compiler) {
+	int endJump = emitJump(compiler, OP_JUMP_IF_TRUE);
+
+	emitByte(compiler, OP_POP);
+	parsePrecedence(compiler, PREC_OR);
+
+	patchJump(compiler, endJump);
 }
 
 static void string(Compiler* compiler) {
@@ -344,7 +407,7 @@ ParseRule rules[] = {
 	[TOKEN_IDENTIFIER] = {		variable,	NULL,		PREC_NONE},
 	[TOKEN_STRING] = {			string,		NULL,		PREC_NONE},
 	[TOKEN_NUMBER] = {			number,		NULL,		PREC_NONE},
-	[TOKEN_AND] = {				NULL,		NULL,		PREC_NONE},
+	[TOKEN_AND] = {				NULL,		and_expr,	PREC_AND},
 	[TOKEN_BREAK] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CATCH] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS] = {			NULL,		NULL,		PREC_NONE},
@@ -360,7 +423,7 @@ ParseRule rules[] = {
 	[TOKEN_IN] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_IS] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_NIL] = {				literal,	NULL,		PREC_NONE},
-	[TOKEN_OR] = {				NULL,		NULL,		PREC_NONE},
+	[TOKEN_OR] = {				NULL,		or_expr,	PREC_OR},
 	[TOKEN_RETURN] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_THROW] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_TRUE] = {			literal,	NULL,		PREC_NONE},
@@ -414,6 +477,29 @@ static void block(Compiler* compiler, TokenType end, const char* missingMessage)
 	}
 
 	consume(compiler, end, missingMessage);
+}
+
+static void breakStatement(Compiler* compiler) {
+	if (compiler->loopCount == 0) {
+		error(compiler, "Cannot break, not in a loop.");
+		return;
+	}
+
+	Loop* loop = &compiler->loops[compiler->loopCount - 1];
+	scopePop(compiler, loop->depth);
+	patchJump(compiler, loop->exit);
+	loop->exit = emitJump(compiler, OP_JUMP);
+}
+
+static void continueStatement(Compiler* compiler) {
+	if (compiler->loopCount == 0) {
+		error(compiler, "Cannot continue, not in a loop.");
+		return;
+	}
+
+	Loop* loop = &compiler->loops[compiler->loopCount - 1];
+	scopePop(compiler, loop->depth);
+	emitLoop(compiler, loop->start);
 }
 
 static void expressionStatement(Compiler* compiler) {
@@ -496,6 +582,104 @@ static void expressionStatement(Compiler* compiler) {
 	}
 }
 
+static void forStatement(Compiler* compiler) {
+	if (compiler->loopCount == MAX_LOOP) {
+		error(compiler, "Too many nested loops.");
+		return;
+	}
+
+	beginScope(compiler);
+
+	Loop* loop = &compiler->loops[compiler->loopCount++];
+	loop->start = currentChunk(compiler)->count;
+	loop->depth = compiler->scopeDepth;
+
+	if (match(compiler, TOKEN_IDENTIFIER)) {
+		if (match(compiler, TOKEN_IN)) {
+			// todo - iterator
+		}
+		else {
+			// not an iterator, continue parsing the expression
+			expressionFromPrevious(compiler);
+		}
+	}
+	else {
+		expression(compiler);
+	}
+
+	loop->exit = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
+
+	while (compiler->parser.current.type != TOKEN_FOR_END &&
+		compiler->parser.current.type != TOKEN_EOF) {
+
+		statement(compiler);
+	}
+
+	endScope(compiler);
+
+	emitLoop(compiler, loop->start);
+
+	patchJump(compiler, loop->exit);
+
+	consume(compiler, TOKEN_FOR_END, "Expect '/for' after block.");
+
+	compiler->loopCount--;
+}
+
+static void ifStatement(Compiler* compiler) {
+	expression(compiler);
+
+	int thenJump = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
+
+	beginScope(compiler);
+	while (compiler->parser.current.type != TOKEN_IF_END &&
+		compiler->parser.current.type != TOKEN_ELIF &&
+		compiler->parser.current.type != TOKEN_ELSE &&
+		compiler->parser.current.type != TOKEN_EOF) {
+
+		statement(compiler);
+	}
+	endScope(compiler);
+
+	int elseJump = emitJump(compiler, OP_JUMP);
+
+	patchJump(compiler, thenJump);
+
+	while (match(compiler, TOKEN_ELIF)) {
+		expression(compiler);
+
+		thenJump = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
+
+		beginScope(compiler);
+		while (compiler->parser.current.type != TOKEN_IF_END &&
+			compiler->parser.current.type != TOKEN_ELIF &&
+			compiler->parser.current.type != TOKEN_ELSE &&
+			compiler->parser.current.type != TOKEN_EOF) {
+
+			statement(compiler);
+		}
+		endScope(compiler);
+
+		patchJump(compiler, elseJump);
+		elseJump = emitJump(compiler, OP_JUMP);
+		patchJump(compiler, thenJump);
+	}
+
+	if (match(compiler, TOKEN_ELSE)) {
+		beginScope(compiler);
+		while (compiler->parser.current.type != TOKEN_IF_END &&
+			compiler->parser.current.type != TOKEN_EOF) {
+
+			statement(compiler);
+		}
+		endScope(compiler);
+	}
+
+	patchJump(compiler, elseJump);
+
+	consume(compiler, TOKEN_IF_END, "Expect '/if' after block.");
+}
+
 static void synchronize(Compiler* compiler) {
 	compiler->parser.panicMode = false;
 
@@ -541,10 +725,22 @@ static void statement(Compiler* compiler) {
 	if (match(compiler, TOKEN_SEMICOLON)) {
 		// empty statement
 	}
+	else if (match(compiler, TOKEN_BREAK)) {
+		breakStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_CONTINUE)) {
+		continueStatement(compiler);
+	}
 	else if (match(compiler, TOKEN_DO)) {
 		beginScope(compiler);
 		block(compiler, TOKEN_DO_END, "Expect '/do' after block.");
 		endScope(compiler);
+	}
+	else if (match(compiler, TOKEN_FOR)) {
+		forStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_IF)) {
+		ifStatement(compiler);
 	}
 	else {
 		expressionStatement(compiler);

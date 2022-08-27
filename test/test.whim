@@ -1,0 +1,16 @@
+// simple test file
+
+i := 1
+
+for i < 7
+    i += 2
+    x := 1
+
+    for true
+        y := 2
+        break
+        z := 3
+    /for
+/for
+
+i

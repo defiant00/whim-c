@@ -169,3 +169,5 @@ compiled: *.whir
 * utf8
 * constant deduplication
 * op pop n
+* separate sized jumps
+* have exit jumps jump straight to the end instead of chaining

@@ -86,6 +86,8 @@ static ObjString* concatValue(VM* vm, ObjString* a) {
 
 static InterpretResult run(VM* vm) {
 #define READ_BYTE() (*vm->ip++)
+#define READ_SHORT() \
+	(vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op) \
@@ -330,6 +332,36 @@ static InterpretResult run(VM* vm) {
 		case OP_NOT:
 			vm->stackTop[-1] = BOOL_VAL(isFalsey(vm->stackTop[-1]));
 			break;
+		case OP_JUMP: {
+			uint16_t offset = READ_SHORT();
+			vm->ip += offset;
+			break;
+		}
+		case OP_JUMP_BACK: {
+			uint16_t offset = READ_SHORT();
+			vm->ip -= offset;
+			break;
+		}
+		case OP_JUMP_IF_TRUE: {
+			uint16_t offset = READ_SHORT();
+			if (!isFalsey(peek(vm, 0))) vm->ip += offset;
+			break;
+		}
+		case OP_JUMP_IF_FALSE: {
+			uint16_t offset = READ_SHORT();
+			if (isFalsey(peek(vm, 0))) vm->ip += offset;
+			break;
+		}
+		case OP_JUMP_IF_TRUE_POP: {
+			uint16_t offset = READ_SHORT();
+			if (!isFalsey(pop(vm))) vm->ip += offset;
+			break;
+		}
+		case OP_JUMP_IF_FALSE_POP: {
+			uint16_t offset = READ_SHORT();
+			if (isFalsey(pop(vm))) vm->ip += offset;
+			break;
+		}
 		case OP_RETURN: {
 			// exit interpreter
 			return INTERPRET_OK;
@@ -338,6 +370,7 @@ static InterpretResult run(VM* vm) {
 	}
 
 #undef READ_BYTE
+#undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP

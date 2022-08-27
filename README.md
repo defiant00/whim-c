@@ -121,6 +121,21 @@ myInst :: MyClass(1, 2)
 list := [1, 2.3, 'hi', myObj, MyClass, myFunc]
 list[1]        // this is 2.3
 list[2] = 42   // this has now changed from a string to an int
+// negative indexes are equivalent to list.length + index
+list[-1] = 'last item'    // this updates the last item in the list
+
+// Ranges
+[from..to(exclusive)]
+// from always defaults to 0
+// to defaults to item.length if applicable
+list[..] is the whole list
+
+// a range is stored as start and end and can be iterated
+[1..4].list() == [1, 2, 3, 4]    // convert to a list
+// can specify step
+[1..4, 2]
+[4..1, -1]
+
 
 // a semicolon is an explicit empty statement for grammar ambiguities
 // this is myList[1]
@@ -145,6 +160,7 @@ a
 // ---------  ---------
 // list       List          []
 // map        Map           [key :: const, key := var, 'string key' :: val]
+// range      Range         [from..to] [from..to, step]
 
 // Operators: + - * / % ! == != and or :: := = += -= *= /= %= is
 

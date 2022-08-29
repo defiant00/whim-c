@@ -2,9 +2,7 @@
 #define whimsy_object_h
 
 #include "chunk.h"
-#include "common.h"
 #include "value.h"
-#include "vm.h"
 
 #define OBJ_TYPE(value)		(AS_OBJ(value)->type)
 
@@ -39,9 +37,6 @@ struct ObjString {
 	uint32_t hash;
 };
 
-ObjFunction* newFunction(VM* vm);
-ObjString* takeString(VM* vm, char* chars, int length);
-ObjString* copyString(VM* vm, const char* chars, int length);
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {

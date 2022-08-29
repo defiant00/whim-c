@@ -9,8 +9,70 @@
 #include "object.h"
 #include "vm.h"
 
+#define ALLOCATE_OBJ(vm, type, objectType) \
+	(type*)allocateObject(vm, sizeof(type), objectType)
+
+static Obj* allocateObject(VM* vm, size_t size, ObjType type) {
+	Obj* object = (Obj*)reallocate(NULL, 0, size);
+	object->type = type;
+
+	object->next = vm->objects;
+	vm->objects = object;
+
+	return object;
+}
+
+ObjFunction* newFunction(VM* vm) {
+	ObjFunction* function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
+	function->arity = 0;
+	function->name = NULL;
+	initChunk(&function->chunk);
+	return function;
+}
+
+static ObjString* allocateString(VM* vm, char* chars, int length, uint32_t hash) {
+	ObjString* string = ALLOCATE_OBJ(vm, ObjString, OBJ_STRING);
+	string->length = length;
+	string->chars = chars;
+	string->hash = hash;
+	tableSet(&vm->strings, string, NIL_VAL);
+	return string;
+}
+
+static uint32_t hashString(const char* key, int length) {
+	uint32_t hash = 2166136261u;
+	for (int i = 0; i < length; i++) {
+		hash ^= (uint8_t)key[i];
+		hash *= 16777619;
+	}
+	return hash;
+}
+
+ObjString* takeString(VM* vm, char* chars, int length) {
+	uint32_t hash = hashString(chars, length);
+	ObjString* interned = tableFindString(&vm->strings, chars, length, hash);
+	if (interned != NULL) {
+		FREE_ARRAY(char, chars, length + 1);
+		return interned;
+	}
+
+	return allocateString(vm, chars, length, hash);
+}
+
+ObjString* copyString(VM* vm, const char* chars, int length) {
+	uint32_t hash = hashString(chars, length);
+	ObjString* interned = tableFindString(&vm->strings, chars, length, hash);
+	if (interned != NULL) return interned;
+
+	char* heapChars = ALLOCATE(char, length + 1);
+	memcpy(heapChars, chars, length);
+	heapChars[length] = '\0';
+	return allocateString(vm, heapChars, length, hash);
+}
+
 static void resetStack(VM* vm) {
 	vm->stackTop = vm->stack;
+	vm->frameCount = 0;
 }
 
 static void runtimeError(VM* vm, const char* format, ...) {
@@ -20,8 +82,9 @@ static void runtimeError(VM* vm, const char* format, ...) {
 	va_end(args);
 	fputs("\n", stderr);
 
-	size_t instruction = vm->ip - vm->chunk->code - 1;
-	int line = vm->chunk->lines[instruction];
+	CallFrame* frame = &vm->frames[vm->frameCount - 1];
+	size_t instruction = frame->ip - frame->function->chunk.code - 1;
+	int line = frame->function->chunk.lines[instruction];
 	fprintf(stderr, "[line %d] in script\n", line);
 	resetStack(vm);
 }
@@ -85,10 +148,12 @@ static ObjString* concatValue(VM* vm, ObjString* a) {
 }
 
 static InterpretResult run(VM* vm) {
-#define READ_BYTE() (*vm->ip++)
+	CallFrame* frame = &vm->frames[vm->frameCount - 1];
+
+#define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() \
-	(vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
-#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+	(frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op) \
 	do { \
@@ -121,7 +186,7 @@ static InterpretResult run(VM* vm) {
 #define LOCAL_NUM_OP_ASSIGN(op) \
 	do { \
 		uint8_t index = READ_BYTE(); \
-		Value* value = &vm->stack[index]; \
+		Value* value = &frame->slots[index]; \
 		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
 			runtimeError(vm, "Operands must be numbers."); \
 			return INTERPRET_RUNTIME_ERROR; \
@@ -139,7 +204,7 @@ static InterpretResult run(VM* vm) {
 		}
 		printf("\n");
 
-		disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+		disassembleInstruction(&frame->function->chunk, (int)(frame->ip - frame->function->chunk.code));
 #endif
 
 		uint8_t instruction;
@@ -242,17 +307,17 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_GET_LOCAL: {
 			uint8_t index = READ_BYTE();
-			push(vm, vm->stack[index]);
+			push(vm, frame->slots[index]);
 			break;
 		}
 		case OP_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
-			vm->stack[index] = pop(vm);
+			frame->slots[index] = pop(vm);
 			break;
 		}
 		case OP_ADD_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
-			Value* value = &vm->stack[index];
+			Value* value = &frame->slots[index];
 			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
 				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
 			}
@@ -270,7 +335,7 @@ static InterpretResult run(VM* vm) {
 		case OP_DIVIDE_SET_LOCAL:	LOCAL_NUM_OP_ASSIGN(/= ); break;
 		case OP_MODULUS_SET_LOCAL: {
 			uint8_t index = READ_BYTE();
-			Value* value = &vm->stack[index];
+			Value* value = &frame->slots[index];
 			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
 				runtimeError(vm, "Operands must be numbers.");
 				return INTERPRET_RUNTIME_ERROR;
@@ -334,32 +399,32 @@ static InterpretResult run(VM* vm) {
 			break;
 		case OP_JUMP: {
 			uint16_t offset = READ_SHORT();
-			vm->ip += offset;
+			frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_BACK: {
 			uint16_t offset = READ_SHORT();
-			vm->ip -= offset;
+			frame->ip -= offset;
 			break;
 		}
 		case OP_JUMP_IF_TRUE: {
 			uint16_t offset = READ_SHORT();
-			if (!isFalsey(peek(vm, 0))) vm->ip += offset;
+			if (!isFalsey(peek(vm, 0))) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
-			if (isFalsey(peek(vm, 0))) vm->ip += offset;
+			if (isFalsey(peek(vm, 0))) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_IF_TRUE_POP: {
 			uint16_t offset = READ_SHORT();
-			if (!isFalsey(pop(vm))) vm->ip += offset;
+			if (!isFalsey(pop(vm))) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_IF_FALSE_POP: {
 			uint16_t offset = READ_SHORT();
-			if (isFalsey(pop(vm))) vm->ip += offset;
+			if (isFalsey(pop(vm))) frame->ip += offset;
 			break;
 		}
 		case OP_RETURN: {
@@ -379,19 +444,14 @@ static InterpretResult run(VM* vm) {
 }
 
 InterpretResult interpret(VM* vm, const char* source) {
-	Chunk chunk;
-	initChunk(&chunk);
+	ObjFunction* function = compile(vm, source);
+	if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
-	if (!compile(vm, source, &chunk)) {
-		freeChunk(&chunk);
-		return INTERPRET_COMPILE_ERROR;
-	}
+	push(vm, OBJ_VAL(function));
+	CallFrame* frame = &vm->frames[vm->frameCount++];
+	frame->function = function;
+	frame->ip = function->chunk.code;
+	frame->slots = vm->stack;
 
-	vm->chunk = &chunk;
-	vm->ip = vm->chunk->code;
-
-	InterpretResult result = run(vm);
-
-	freeChunk(&chunk);
-	return result;
+	return run(vm);
 }

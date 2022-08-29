@@ -12,7 +12,6 @@
 
 typedef struct {
 	Scanner scanner;
-	Chunk* compilingChunk;
 	Token current;
 	Token previous;
 	bool hadError;
@@ -44,9 +43,16 @@ typedef struct {
 	int depth;
 } Loop;
 
+typedef enum {
+	TYPE_FUNCTION,
+	TYPE_SCRIPT,
+} FunctionType;
+
 typedef struct {
 	VM* vm;
 	Parser parser;
+	ObjFunction* function;
+	FunctionType type;
 	Local locals[UINT8_COUNT];
 	int localCount;
 	Loop loops[MAX_LOOP];
@@ -63,21 +69,29 @@ typedef struct {
 } ParseRule;
 
 static Chunk* currentChunk(Compiler* compiler) {
-	return compiler->parser.compilingChunk;
+	return &compiler->function->chunk;
 }
 
-static void initCompiler(Compiler* compiler, VM* vm, const char* source, Chunk* chunk) {
+static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, const char* source) {
 	compiler->vm = vm;
+
+	compiler->function = NULL;
+	compiler->type = type;
 
 	compiler->localCount = 0;
 	compiler->loopCount = 0;
 	compiler->scopeDepth = 0;
+	compiler->function = newFunction(vm);
 
 	initScanner(&compiler->parser.scanner, source);
 
-	compiler->parser.compilingChunk = chunk;
 	compiler->parser.hadError = false;
 	compiler->parser.panicMode = false;
+
+	Local* local = &compiler->locals[compiler->localCount++];
+	local->depth = 0;
+	local->name.start = "";
+	local->name.length = 0;
 }
 
 static void errorAt(Compiler* compiler, Token* token, const char* message) {
@@ -154,7 +168,7 @@ static int emitJump(Compiler* compiler, uint8_t instruction) {
 	return currentChunk(compiler)->count - 2;
 }
 
-static int emitLoop(Compiler* compiler, int loopStart) {
+static void emitLoop(Compiler* compiler, int loopStart) {
 	emitByte(compiler, OP_JUMP_BACK);
 
 	int offset = currentChunk(compiler)->count - loopStart + 2;
@@ -194,13 +208,18 @@ static void patchJump(Compiler* compiler, int offset) {
 	currentChunk(compiler)->code[offset + 1] = jump & 0xff;
 }
 
-static void endCompiler(Compiler* compiler) {
+static ObjFunction* endCompiler(Compiler* compiler) {
+	emitReturn(compiler);
+	ObjFunction* function = compiler->function;
+
 #ifdef DEBUG_PRINT_CODE
 	if (!compiler->parser.hadError) {
-		disassembleChunk(currentChunk(compiler), "code");
+		disassembleChunk(currentChunk(compiler), function->name != NULL ?
+			function->name->chars : "<script>");
 	}
 #endif
-	emitReturn(compiler);
+
+	return function;
 }
 
 static void beginScope(Compiler* compiler) {
@@ -747,9 +766,9 @@ static void statement(Compiler* compiler) {
 	}
 }
 
-bool compile(VM* vm, const char* source, Chunk* chunk) {
+ObjFunction* compile(VM* vm, const char* source) {
 	Compiler compiler;
-	initCompiler(&compiler, vm, source, chunk);
+	initCompiler(&compiler, TYPE_SCRIPT, vm, source);
 
 	advance(&compiler);
 
@@ -757,6 +776,6 @@ bool compile(VM* vm, const char* source, Chunk* chunk) {
 		declaration(&compiler);
 	}
 
-	endCompiler(&compiler);
-	return !compiler.parser.hadError;
+	ObjFunction* function = endCompiler(&compiler);
+	return compiler.parser.hadError ? NULL : function;
 }

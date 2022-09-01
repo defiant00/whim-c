@@ -117,6 +117,7 @@ static void emitLoop(Compiler* compiler, int loopStart) {
 }
 
 static void emitReturn(Compiler* compiler) {
+	emitByte(compiler, OP_NIL);
 	emitByte(compiler, OP_RETURN);
 }
 
@@ -236,6 +237,21 @@ static void defineGlobal(Compiler* compiler, uint8_t global, bool constant) {
 	emitBytes(compiler, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
 }
 
+static uint8_t argumentList(Compiler* compiler) {
+	uint8_t argCount = 0;
+	if (!check(compiler, TOKEN_RIGHT_PAREN)) {
+		do {
+			expression(compiler);
+			if (argCount == 255) {
+				error(compiler, "Can't have more than 255 arguments.");
+			}
+			argCount++;
+		} while (match(compiler, TOKEN_COMMA) && !check(compiler, TOKEN_RIGHT_PAREN));
+	}
+	consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+	return argCount;
+}
+
 static void and_expr(Compiler* compiler) {
 	int endJump = emitJump(compiler, OP_JUMP_IF_FALSE);
 
@@ -267,7 +283,8 @@ static void binary(Compiler* compiler) {
 }
 
 static void call(Compiler* compiler) {
-	// todo
+	uint8_t argCount = argumentList(compiler);
+	emitBytes(compiler, OP_CALL, argCount);
 }
 
 static void function(Compiler* compiler) {
@@ -288,6 +305,7 @@ static void function(Compiler* compiler) {
 			}
 			consume(&comp, TOKEN_IDENTIFIER, "Expect parameter name.");
 			declareLocal(&comp, &comp.parser->previous, true);
+			markInitialized(&comp);
 		} while (match(&comp, TOKEN_COMMA) && !check(&comp, TOKEN_RIGHT_PAREN));
 	}
 	consume(&comp, TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");

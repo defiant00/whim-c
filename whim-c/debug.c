@@ -90,6 +90,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_JUMP_IF_FALSE:			return jumpInstruction("jump if false", 1, chunk, offset);
 	case OP_JUMP_IF_TRUE_POP:		return jumpInstruction("jump if true (pop)", 1, chunk, offset);
 	case OP_JUMP_IF_FALSE_POP:		return jumpInstruction("jump if false (pop)", 1, chunk, offset);
+	case OP_CALL:					return byteInstruction("call", chunk, offset);
 	case OP_RETURN:					return simpleInstruction("return", offset);
 	default:
 		printf("Unknown opcode %d\n", instruction);

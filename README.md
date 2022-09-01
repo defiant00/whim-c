@@ -188,3 +188,4 @@ compiled: *.whir
 * op pop n
 * separate sized jumps
 * have exit jumps jump straight to the end instead of chaining
+* recursive function calls

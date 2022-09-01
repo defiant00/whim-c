@@ -1,16 +1,12 @@
 // simple test file
 
-i := 1
+test :: fn(a, b)
+    a + b
+/fn
 
-for i < 7
-    i += 2
-    x := 1
+test2 :: fn(a, b,)
+    a + b
+/fn
 
-    for true
-        y := 2
-        break
-        z := 3
-    /for
-/for
-
-i
+test(3, 4,)
+test2(1, 2)

@@ -13,7 +13,7 @@ static Chunk* currentChunk(Compiler* compiler) {
 	return &compiler->function->chunk;
 }
 
-static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, const char* source) {
+static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, Parser* parser) {
 	compiler->vm = vm;
 
 	compiler->function = NULL;
@@ -24,10 +24,7 @@ static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, const ch
 	compiler->scopeDepth = 0;
 	compiler->function = newFunction(vm);
 
-	initScanner(&compiler->parser.scanner, source);
-
-	compiler->parser.hadError = false;
-	compiler->parser.panicMode = false;
+	compiler->parser = parser;
 
 	Local* local = &compiler->locals[compiler->localCount++];
 	local->depth = 0;
@@ -36,8 +33,8 @@ static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, const ch
 }
 
 static void errorAt(Compiler* compiler, Token* token, const char* message) {
-	if (compiler->parser.panicMode) return;
-	compiler->parser.panicMode = true;
+	if (compiler->parser->panicMode) return;
+	compiler->parser->panicMode = true;
 
 	fprintf(stderr, "[line %d] Error", token->line);
 
@@ -52,30 +49,30 @@ static void errorAt(Compiler* compiler, Token* token, const char* message) {
 	}
 
 	fprintf(stderr, ": %s\n", message);
-	compiler->parser.hadError = true;
+	compiler->parser->hadError = true;
 }
 
 static void error(Compiler* compiler, const char* message) {
-	errorAt(compiler, &compiler->parser.previous, message);
+	errorAt(compiler, &compiler->parser->previous, message);
 }
 
 static void errorAtCurrent(Compiler* compiler, const char* message) {
-	errorAt(compiler, &compiler->parser.current, message);
+	errorAt(compiler, &compiler->parser->current, message);
 }
 
 static void advance(Compiler* compiler) {
-	compiler->parser.previous = compiler->parser.current;
+	compiler->parser->previous = compiler->parser->current;
 
 	for (;;) {
-		compiler->parser.current = scanToken(&compiler->parser.scanner);
-		if (compiler->parser.current.type != TOKEN_ERROR) break;
+		compiler->parser->current = scanToken(compiler->parser->scanner);
+		if (compiler->parser->current.type != TOKEN_ERROR) break;
 
-		errorAtCurrent(compiler, compiler->parser.current.start);
+		errorAtCurrent(compiler, compiler->parser->current.start);
 	}
 }
 
 static void consume(Compiler* compiler, TokenType type, const char* message) {
-	if (compiler->parser.current.type == type) {
+	if (compiler->parser->current.type == type) {
 		advance(compiler);
 		return;
 	}
@@ -84,7 +81,7 @@ static void consume(Compiler* compiler, TokenType type, const char* message) {
 }
 
 static bool check(Compiler* compiler, TokenType type) {
-	return compiler->parser.current.type == type;
+	return compiler->parser->current.type == type;
 }
 
 static bool match(Compiler* compiler, TokenType type) {
@@ -94,7 +91,7 @@ static bool match(Compiler* compiler, TokenType type) {
 }
 
 static void emitByte(Compiler* compiler, uint8_t byte) {
-	writeChunk(currentChunk(compiler), byte, compiler->parser.previous.line);
+	writeChunk(currentChunk(compiler), byte, compiler->parser->previous.line);
 }
 
 static void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
@@ -154,7 +151,7 @@ static ObjFunction* endCompiler(Compiler* compiler) {
 	ObjFunction* function = compiler->function;
 
 #ifdef DEBUG_PRINT_CODE
-	if (!compiler->parser.hadError) {
+	if (!compiler->parser->hadError) {
 		disassembleChunk(currentChunk(compiler), function->name != NULL ?
 			function->name->chars : "<script>");
 	}
@@ -186,6 +183,7 @@ static void scopePop(Compiler* compiler, int depth) {
 
 static void expression(Compiler* compiler);
 static void statement(Compiler* compiler);
+static void block(Compiler* compiler, TokenType end, const char* missingMessage);
 static void declaration(Compiler* compiler);
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Compiler* compiler, Precedence precedence);
@@ -248,7 +246,7 @@ static void and_expr(Compiler* compiler) {
 }
 
 static void binary(Compiler* compiler) {
-	TokenType operatorType = compiler->parser.previous.type;
+	TokenType operatorType = compiler->parser->previous.type;
 	ParseRule* rule = getRule(operatorType);
 	parsePrecedence(compiler, (Precedence)(rule->precedence + 1));
 
@@ -268,8 +266,39 @@ static void binary(Compiler* compiler) {
 	}
 }
 
+static void call(Compiler* compiler) {
+	// todo
+}
+
+static void function(Compiler* compiler) {
+	Compiler comp;
+	initCompiler(&comp, TYPE_FUNCTION, compiler->vm, compiler->parser);
+	comp.enclosing = compiler;
+	if (compiler->isNamedDeclaration) {
+		comp.function->name = copyString(compiler->vm, compiler->nameStart, compiler->nameLength);
+	}
+	beginScope(&comp);
+
+	consume(&comp, TOKEN_LEFT_PAREN, "Expect '(' after fn.");
+	if (!check(&comp, TOKEN_RIGHT_PAREN)) {
+		do {
+			comp.function->arity++;
+			if (comp.function->arity > 255) {
+				errorAtCurrent(&comp, "Can't have more than 255 parameters.");
+			}
+			consume(&comp, TOKEN_IDENTIFIER, "Expect parameter name.");
+			declareLocal(&comp, &comp.parser->previous, true);
+		} while (match(&comp, TOKEN_COMMA) && !check(&comp, TOKEN_RIGHT_PAREN));
+	}
+	consume(&comp, TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+	block(&comp, TOKEN_FN_END, "Expect '/fn' after block.");
+
+	ObjFunction* function = endCompiler(&comp);
+	emitBytes(compiler, OP_CONSTANT, makeConstant(compiler, OBJ_VAL(function)));
+}
+
 static void literal(Compiler* compiler) {
-	switch (compiler->parser.previous.type) {
+	switch (compiler->parser->previous.type) {
 	case TOKEN_FALSE: emitByte(compiler, OP_FALSE); break;
 	case TOKEN_NIL: emitByte(compiler, OP_NIL); break;
 	case TOKEN_TRUE: emitByte(compiler, OP_TRUE); break;
@@ -283,7 +312,7 @@ static void grouping(Compiler* compiler) {
 }
 
 static void number(Compiler* compiler) {
-	double value = strtod(compiler->parser.previous.start, NULL);
+	double value = strtod(compiler->parser->previous.start, NULL);
 	emitConstant(compiler, NUMBER_VAL(value));
 }
 
@@ -299,8 +328,8 @@ static void or_expr(Compiler* compiler) {
 static void string(Compiler* compiler) {
 	// TODO - deal with escaped characters
 	emitConstant(compiler, OBJ_VAL(copyString(compiler->vm,
-		compiler->parser.previous.start + 1,
-		compiler->parser.previous.length - 2)));
+		compiler->parser->previous.start + 1,
+		compiler->parser->previous.length - 2)));
 }
 
 static void namedVariable(Compiler* compiler, Token name) {
@@ -317,11 +346,11 @@ static void namedVariable(Compiler* compiler, Token name) {
 }
 
 static void variable(Compiler* compiler) {
-	namedVariable(compiler, compiler->parser.previous);
+	namedVariable(compiler, compiler->parser->previous);
 }
 
 static void unary(Compiler* compiler) {
-	TokenType operatorType = compiler->parser.previous.type;
+	TokenType operatorType = compiler->parser->previous.type;
 
 	// compile the operand
 	parsePrecedence(compiler, PREC_UNARY);
@@ -336,7 +365,7 @@ static void unary(Compiler* compiler) {
 }
 
 ParseRule rules[] = {
-	[TOKEN_LEFT_PAREN] = {		grouping,	NULL,		PREC_NONE},
+	[TOKEN_LEFT_PAREN] = {		grouping,	call,		PREC_CALL},
 	[TOKEN_RIGHT_PAREN] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_LEFT_BRACKET] = {	NULL,		NULL,		PREC_NONE},
 	[TOKEN_RIGHT_BRACKET] = {	NULL,		NULL,		PREC_NONE},
@@ -376,7 +405,7 @@ ParseRule rules[] = {
 	[TOKEN_ELSE] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_FALSE] = {			literal,	NULL,		PREC_NONE},
 	[TOKEN_FINALLY] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_FN] = {				NULL,		NULL,		PREC_NONE},
+	[TOKEN_FN] = {				function,	NULL,		PREC_NONE},
 	[TOKEN_FOR] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_FROM] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_IF] = {				NULL,		NULL,		PREC_NONE},
@@ -399,7 +428,7 @@ ParseRule rules[] = {
 };
 
 static void parsePrecedenceFromPrevious(Compiler* compiler, Precedence precedence) {
-	ParseFn prefixRule = getRule(compiler->parser.previous.type)->prefix;
+	ParseFn prefixRule = getRule(compiler->parser->previous.type)->prefix;
 	if (prefixRule == NULL) {
 		error(compiler, "Expect expression.");
 		return;
@@ -407,9 +436,9 @@ static void parsePrecedenceFromPrevious(Compiler* compiler, Precedence precedenc
 
 	prefixRule(compiler);
 
-	while (precedence <= getRule(compiler->parser.current.type)->precedence) {
+	while (precedence <= getRule(compiler->parser->current.type)->precedence) {
 		advance(compiler);
-		ParseFn infixRule = getRule(compiler->parser.previous.type)->infix;
+		ParseFn infixRule = getRule(compiler->parser->previous.type)->infix;
 		infixRule(compiler);
 	}
 }
@@ -466,19 +495,22 @@ static void expressionStatement(Compiler* compiler) {
 	// parse one primary expression and check for declaration or assignment
 	// if not, then parse as a normal expression statement
 	if (match(compiler, TOKEN_IDENTIFIER)) {
-		switch (compiler->parser.current.type) {
+		switch (compiler->parser->current.type) {
 		case TOKEN_COLON_COLON:
 		case TOKEN_COLON_EQUAL: {
-			bool constant = compiler->parser.current.type == TOKEN_COLON_COLON;
+			bool constant = compiler->parser->current.type == TOKEN_COLON_COLON;
+			compiler->isNamedDeclaration = true;
+			compiler->nameStart = compiler->parser->previous.start;
+			compiler->nameLength = compiler->parser->previous.length;
 
 			if (compiler->scopeDepth > 0) {
-				declareLocal(compiler, &compiler->parser.previous, constant);
+				declareLocal(compiler, &compiler->parser->previous, constant);
 				advance(compiler);	// accept :: :=
 				expression(compiler);
 				markInitialized(compiler);
 			}
 			else {
-				uint8_t arg = identifierConstant(compiler, &compiler->parser.previous);
+				uint8_t arg = identifierConstant(compiler, &compiler->parser->previous);
 				advance(compiler);	// accept :: :=
 				expression(compiler);
 				defineGlobal(compiler, arg, constant);
@@ -493,14 +525,14 @@ static void expressionStatement(Compiler* compiler) {
 		case TOKEN_SLASH_EQUAL:
 		case TOKEN_PERCENT_EQUAL: {
 			// assignment
-			int arg = resolveLocal(compiler, &compiler->parser.previous);
+			int arg = resolveLocal(compiler, &compiler->parser->previous);
 			uint8_t op;
 			if (arg == -1) {
 				// global
-				arg = identifierConstant(compiler, &compiler->parser.previous);
+				arg = identifierConstant(compiler, &compiler->parser->previous);
 
 				op = OP_SET_GLOBAL;
-				switch (compiler->parser.current.type) {
+				switch (compiler->parser->current.type) {
 				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
 				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
 				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
@@ -515,7 +547,7 @@ static void expressionStatement(Compiler* compiler) {
 				}
 
 				op = OP_SET_LOCAL;
-				switch (compiler->parser.current.type) {
+				switch (compiler->parser->current.type) {
 				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_LOCAL; break;
 				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_LOCAL; break;
 				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_LOCAL; break;
@@ -569,8 +601,8 @@ static void forStatement(Compiler* compiler) {
 
 	loop->exit = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
 
-	while (compiler->parser.current.type != TOKEN_FOR_END &&
-		compiler->parser.current.type != TOKEN_EOF) {
+	while (compiler->parser->current.type != TOKEN_FOR_END &&
+		compiler->parser->current.type != TOKEN_EOF) {
 
 		statement(compiler);
 	}
@@ -592,10 +624,10 @@ static void ifStatement(Compiler* compiler) {
 	int thenJump = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
 
 	beginScope(compiler);
-	while (compiler->parser.current.type != TOKEN_IF_END &&
-		compiler->parser.current.type != TOKEN_ELIF &&
-		compiler->parser.current.type != TOKEN_ELSE &&
-		compiler->parser.current.type != TOKEN_EOF) {
+	while (compiler->parser->current.type != TOKEN_IF_END &&
+		compiler->parser->current.type != TOKEN_ELIF &&
+		compiler->parser->current.type != TOKEN_ELSE &&
+		compiler->parser->current.type != TOKEN_EOF) {
 
 		statement(compiler);
 	}
@@ -611,10 +643,10 @@ static void ifStatement(Compiler* compiler) {
 		thenJump = emitJump(compiler, OP_JUMP_IF_FALSE_POP);
 
 		beginScope(compiler);
-		while (compiler->parser.current.type != TOKEN_IF_END &&
-			compiler->parser.current.type != TOKEN_ELIF &&
-			compiler->parser.current.type != TOKEN_ELSE &&
-			compiler->parser.current.type != TOKEN_EOF) {
+		while (compiler->parser->current.type != TOKEN_IF_END &&
+			compiler->parser->current.type != TOKEN_ELIF &&
+			compiler->parser->current.type != TOKEN_ELSE &&
+			compiler->parser->current.type != TOKEN_EOF) {
 
 			statement(compiler);
 		}
@@ -627,8 +659,8 @@ static void ifStatement(Compiler* compiler) {
 
 	if (match(compiler, TOKEN_ELSE)) {
 		beginScope(compiler);
-		while (compiler->parser.current.type != TOKEN_IF_END &&
-			compiler->parser.current.type != TOKEN_EOF) {
+		while (compiler->parser->current.type != TOKEN_IF_END &&
+			compiler->parser->current.type != TOKEN_EOF) {
 
 			statement(compiler);
 		}
@@ -641,10 +673,10 @@ static void ifStatement(Compiler* compiler) {
 }
 
 static void synchronize(Compiler* compiler) {
-	compiler->parser.panicMode = false;
+	compiler->parser->panicMode = false;
 
-	while (compiler->parser.current.type != TOKEN_EOF) {
-		switch (compiler->parser.previous.type) {
+	while (compiler->parser->current.type != TOKEN_EOF) {
+		switch (compiler->parser->previous.type) {
 		case TOKEN_CLASS_END:
 		case TOKEN_DO_END:
 		case TOKEN_FN_END:
@@ -655,7 +687,7 @@ static void synchronize(Compiler* compiler) {
 			return;
 		}
 
-		switch (compiler->parser.current.type) {
+		switch (compiler->parser->current.type) {
 		case TOKEN_BREAK:
 		case TOKEN_CATCH:
 		case TOKEN_CLASS:
@@ -678,10 +710,12 @@ static void synchronize(Compiler* compiler) {
 static void declaration(Compiler* compiler) {
 	statement(compiler);
 
-	if (compiler->parser.panicMode) synchronize(compiler);
+	if (compiler->parser->panicMode) synchronize(compiler);
 }
 
 static void statement(Compiler* compiler) {
+	compiler->isNamedDeclaration = false;
+
 	if (match(compiler, TOKEN_SEMICOLON)) {
 		// empty statement
 	}
@@ -708,8 +742,16 @@ static void statement(Compiler* compiler) {
 }
 
 ObjFunction* compile(VM* vm, const char* source) {
+	Scanner scanner;
+	initScanner(&scanner, source);
+
+	Parser parser;
+	parser.hadError = false;
+	parser.panicMode = false;
+	parser.scanner = &scanner;
+
 	Compiler compiler;
-	initCompiler(&compiler, TYPE_SCRIPT, vm, source);
+	initCompiler(&compiler, TYPE_SCRIPT, vm, &parser);
 
 	advance(&compiler);
 
@@ -718,5 +760,5 @@ ObjFunction* compile(VM* vm, const char* source) {
 	}
 
 	ObjFunction* function = endCompiler(&compiler);
-	return compiler.parser.hadError ? NULL : function;
+	return compiler.parser->hadError ? NULL : function;
 }

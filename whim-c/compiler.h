@@ -6,7 +6,7 @@
 #include "vm.h"
 
 typedef struct {
-	Scanner scanner;
+	Scanner* scanner;
 	Token current;
 	Token previous;
 	bool hadError;
@@ -43,11 +43,15 @@ typedef enum {
 	TYPE_SCRIPT,
 } FunctionType;
 
-typedef struct {
+typedef struct Compiler {
+	struct Compiler* enclosing;
 	VM* vm;
-	Parser parser;
+	Parser* parser;
 	ObjFunction* function;
 	FunctionType type;
+	bool isNamedDeclaration;
+	const char* nameStart;
+	int nameLength;
 	Local locals[UINT8_COUNT];
 	int localCount;
 	Loop loops[MAX_LOOP];

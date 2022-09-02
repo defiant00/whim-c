@@ -1,12 +1,11 @@
 // simple test file
 
-test :: fn(a, b)
-    a + b
+fib :: fn(n)
+	if n < 2 return n /if
+	return fib(n - 2) + fib(n - 1)
 /fn
 
-test2 :: fn(a, b,)
-    a + b
-/fn
+start :: time()
+fib(5)
+print(' ** elapsed: ', time() - start, 's\n',)
 
-test(3, 4,)
-test2(1, 2)

@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -28,6 +29,12 @@ ObjFunction* newFunction(VM* vm) {
 	function->name = NULL;
 	initChunk(&function->chunk);
 	return function;
+}
+
+ObjNative* newNative(VM* vm, NativeFn function) {
+	ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
+	native->function = function;
+	return native;
 }
 
 static ObjString* allocateString(VM* vm, char* chars, int length, uint32_t hash) {
@@ -70,6 +77,50 @@ ObjString* copyString(VM* vm, const char* chars, int length) {
 	return allocateString(vm, heapChars, length, hash);
 }
 
+ObjString* copyEscapeString(VM* vm, const char* chars, int length) {
+	// count actual characters
+	int escapedLength = 0;
+	for (int i = 0; i < length; i++) {
+		if (chars[i] == '\\') {
+			i++;
+		}
+		escapedLength++;
+	}
+
+	// use the base copy string if no escaped characters
+	if (escapedLength == length) {
+		return copyString(vm, chars, length);
+	}
+
+	// allocate the actual size
+	char* heapChars = ALLOCATE(char, escapedLength + 1);
+	int index = 0;
+	for (int i = 0; i < length; i++) {
+		if (chars[i] == '\\') {
+			i++;
+			switch (chars[i]) {
+			case 'n':
+				heapChars[index++] = '\n';
+				break;
+			case 'r':
+				heapChars[index++] = '\r';
+				break;
+			case 't':
+				heapChars[index++] = '\t';
+				break;
+			default:
+				heapChars[index++] = chars[i];
+				break;
+			}
+		}
+		else {
+			heapChars[index++] = chars[i];
+		}
+	}
+	heapChars[escapedLength] = '\0';
+	return takeString(vm, heapChars, escapedLength);
+}
+
 static void resetStack(VM* vm) {
 	vm->stackTop = vm->stack;
 	vm->frameCount = 0;
@@ -103,11 +154,33 @@ static void runtimeError(VM* vm, const char* format, ...) {
 	resetStack(vm);
 }
 
+static void defineNative(VM* vm, const char* name, NativeFn function) {
+	push(vm, OBJ_VAL(copyString(vm, name, (int)strlen(name))));
+	push(vm, OBJ_VAL(newNative(vm, function)));
+	tableSet(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+	pop(vm);
+	pop(vm);
+}
+
+static Value nativePrint(int argCount, Value* args) {
+	for (int i = 0; i < argCount; i++) {
+		printValue(args[i]);
+	}
+	return NIL_VAL;
+}
+
+static Value nativeTime(int argCount, Value* args) {
+	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
 void initVM(VM* vm) {
 	resetStack(vm);
 	vm->objects = NULL;
 	initTable(&vm->globals);
 	initTable(&vm->strings);
+
+	defineNative(vm, "print", nativePrint);
+	defineNative(vm, "time", nativeTime);
 }
 
 void freeVM(VM* vm) {
@@ -152,6 +225,13 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
 		case OBJ_FUNCTION: return call(vm, AS_FUNCTION(callee), argCount);
+		case OBJ_NATIVE: {
+			NativeFn native = AS_NATIVE(callee);
+			Value result = native(argCount, vm->stackTop - argCount);
+			vm->stackTop -= argCount + 1;
+			push(vm, result);
+			return true;
+		}
 		}
 	}
 	runtimeError(vm, "Can only call functions and classes.");

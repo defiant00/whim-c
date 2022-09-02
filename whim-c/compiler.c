@@ -344,8 +344,7 @@ static void or_expr(Compiler* compiler) {
 }
 
 static void string(Compiler* compiler) {
-	// TODO - deal with escaped characters
-	emitConstant(compiler, OBJ_VAL(copyString(compiler->vm,
+	emitConstant(compiler, OBJ_VAL(copyEscapeString(compiler->vm,
 		compiler->parser->previous.start + 1,
 		compiler->parser->previous.length - 2)));
 }
@@ -690,6 +689,11 @@ static void ifStatement(Compiler* compiler) {
 	consume(compiler, TOKEN_IF_END, "Expect '/if' after block.");
 }
 
+static void returnStatement(Compiler* compiler) {
+	expression(compiler);
+	emitByte(compiler, OP_RETURN);
+}
+
 static void synchronize(Compiler* compiler) {
 	compiler->parser->panicMode = false;
 
@@ -753,6 +757,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_IF)) {
 		ifStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_RETURN)) {
+		returnStatement(compiler);
 	}
 	else {
 		expressionStatement(compiler);

@@ -179,7 +179,6 @@ compiled: *.whir
 * \> 256 constants
 * error handling
 * directly load common number opcodes
-* escaped characters in strings
 * strings - flexible array members
 * support other key types for hash tables
 * string hash set (instead of table with nil values) for interning?
@@ -189,3 +188,6 @@ compiled: *.whir
 * separate sized jumps
 * have exit jumps jump straight to the end instead of chaining
 * recursive function calls
+* don't emit (nil and return) if the last line is already a return
+* ip in a local and flag it as a register
+* error reporting from native code

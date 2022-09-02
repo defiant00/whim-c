@@ -37,7 +37,9 @@ void push(VM* vm, Value value);
 Value pop(VM* vm);
 
 ObjFunction* newFunction(VM* vm);
+ObjNative* newNative(VM* vm, NativeFn function);
 ObjString* takeString(VM* vm, char* chars, int length);
 ObjString* copyString(VM* vm, const char* chars, int length);
+ObjString* copyEscapeString(VM* vm, const char* chars, int length);
 
 #endif

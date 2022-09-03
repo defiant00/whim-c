@@ -14,6 +14,7 @@ static Chunk* currentChunk(Compiler* compiler) {
 }
 
 static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, Parser* parser) {
+	compiler->enclosing = NULL;
 	compiler->vm = vm;
 
 	compiler->function = NULL;
@@ -208,6 +209,52 @@ static int resolveLocal(Compiler* compiler, Token* identifier) {
 	return -1;
 }
 
+static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal) {
+	int upvalueCount = compiler->function->upvalueCount;
+
+	for (int i = 0; i < upvalueCount; i++) {
+		Upvalue* upvalue = &compiler->upvalues[i];
+		if (upvalue->index == index && upvalue->isLocal == isLocal) {
+			return i;
+		}
+	}
+
+	if (upvalueCount == UINT8_COUNT) {
+		error(compiler, "Too many closure variables in function.");
+		return 0;
+	}
+
+	compiler->upvalues[upvalueCount].isLocal = isLocal;
+	compiler->upvalues[upvalueCount].index = index;
+	return compiler->function->upvalueCount++;
+}
+
+static int resolveUpvalue(Compiler* compiler, Token* identifier) {
+	if (compiler->enclosing == NULL) return -1;
+
+	int local = resolveLocal(compiler->enclosing, identifier);
+	if (local != -1) {
+		return addUpvalue(compiler, (uint8_t)local, true);
+	}
+
+	int upvalue = resolveUpvalue(compiler->enclosing, identifier);
+	if (upvalue != -1) {
+		return addUpvalue(compiler, (uint8_t)upvalue, false);
+	}
+
+	return -1;
+}
+
+static Local* getUpvalueLocal(Compiler* compiler, int upvalueIndex) {
+	Compiler* comp = compiler;
+	int index = upvalueIndex;
+	while (!comp->upvalues[index].isLocal) {
+		index = comp->upvalues[index].index;
+		comp = comp->enclosing;
+	}
+	return &comp->enclosing->locals[comp->upvalues[index].index];
+}
+
 static void addLocal(Compiler* compiler, Token identifier, bool constant) {
 	if (compiler->localCount == UINT8_COUNT) {
 		error(compiler, "Too many local variables in block.");
@@ -225,8 +272,10 @@ static void markInitialized(Compiler* compiler) {
 }
 
 static void declareLocal(Compiler* compiler, Token* identifier, bool constant) {
-	int arg = resolveLocal(compiler, identifier);
-	if (arg != -1) {
+	if (resolveLocal(compiler, identifier) != -1) {
+		error(compiler, "A variable with this name already exists.");
+	}
+	if (resolveUpvalue(compiler, identifier) != -1) {
 		error(compiler, "A variable with this name already exists.");
 	}
 
@@ -278,7 +327,7 @@ static void binary(Compiler* compiler) {
 	case TOKEN_STAR:			emitByte(compiler, OP_MULTIPLY); break;
 	case TOKEN_SLASH:			emitByte(compiler, OP_DIVIDE); break;
 	case TOKEN_PERCENT:			emitByte(compiler, OP_MODULUS); break;
-	default: return; // unreachable
+	default: return;			// unreachable
 	}
 }
 
@@ -312,7 +361,12 @@ static void function(Compiler* compiler) {
 	block(&comp, TOKEN_FN_END, "Expect '/fn' after block.");
 
 	ObjFunction* function = endCompiler(&comp);
-	emitBytes(compiler, OP_CONSTANT, makeConstant(compiler, OBJ_VAL(function)));
+	emitBytes(compiler, OP_CLOSURE, makeConstant(compiler, OBJ_VAL(function)));
+
+	for (int i = 0; i < function->upvalueCount; i++) {
+		emitByte(compiler, comp.upvalues[i].isLocal ? 1 : 0);
+		emitByte(compiler, comp.upvalues[i].index);
+	}
 }
 
 static void literal(Compiler* compiler) {
@@ -354,6 +408,9 @@ static void namedVariable(Compiler* compiler, Token name) {
 	int arg = resolveLocal(compiler, &name);
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
+	}
+	else if ((arg = resolveUpvalue(compiler, &name)) != -1) {
+		getOp = OP_GET_UPVALUE;
 	}
 	else {
 		arg = identifierConstant(compiler, &name);
@@ -543,21 +600,9 @@ static void expressionStatement(Compiler* compiler) {
 		case TOKEN_PERCENT_EQUAL: {
 			// assignment
 			int arg = resolveLocal(compiler, &compiler->parser->previous);
-			uint8_t op;
-			if (arg == -1) {
-				// global
-				arg = identifierConstant(compiler, &compiler->parser->previous);
 
-				op = OP_SET_GLOBAL;
-				switch (compiler->parser->current.type) {
-				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
-				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
-				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
-				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
-				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_GLOBAL; break;
-				}
-			}
-			else {
+			uint8_t op;
+			if (arg != -1) {
 				// local
 				if (compiler->locals[arg].constant) {
 					error(compiler, "Local is constant.");
@@ -570,6 +615,35 @@ static void expressionStatement(Compiler* compiler) {
 				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_LOCAL; break;
 				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_LOCAL; break;
 				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_LOCAL; break;
+				}
+			}
+			else if ((arg = resolveUpvalue(compiler, &compiler->parser->previous)) != -1) {
+				// upvalue
+				Local* local = getUpvalueLocal(compiler, arg);
+				if (local->constant) {
+					error(compiler, "Local is constant.");
+				}
+
+				op = OP_SET_UPVALUE;
+				switch (compiler->parser->current.type) {
+				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_UPVALUE; break;
+				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_UPVALUE; break;
+				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_UPVALUE; break;
+				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_UPVALUE; break;
+				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_UPVALUE; break;
+				}
+			}
+			else {
+				// global
+				arg = identifierConstant(compiler, &compiler->parser->previous);
+
+				op = OP_SET_GLOBAL;
+				switch (compiler->parser->current.type) {
+				case TOKEN_PLUS_EQUAL: op = OP_ADD_SET_GLOBAL; break;
+				case TOKEN_MINUS_EQUAL: op = OP_SUBTRACT_SET_GLOBAL; break;
+				case TOKEN_STAR_EQUAL: op = OP_MULTIPLY_SET_GLOBAL; break;
+				case TOKEN_SLASH_EQUAL: op = OP_DIVIDE_SET_GLOBAL; break;
+				case TOKEN_PERCENT_EQUAL: op = OP_MODULUS_SET_GLOBAL; break;
 				}
 			}
 

@@ -10,7 +10,7 @@
 #include "object.h"
 #include "vm.h"
 
-#define ALLOCATE_OBJ(vm, type, objectType) \
+#define ALLOCATE_OBJ(type, objectType) \
 	(type*)allocateObject(vm, sizeof(type), objectType)
 
 static Obj* allocateObject(VM* vm, size_t size, ObjType type) {
@@ -23,22 +23,36 @@ static Obj* allocateObject(VM* vm, size_t size, ObjType type) {
 	return object;
 }
 
+ObjClosure* newClosure(VM* vm, ObjFunction* function) {
+	ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
+	for (int i = 0; i < function->upvalueCount; i++) {
+		upvalues[i] = NULL;
+	}
+
+	ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+	closure->function = function;
+	closure->upvalues = upvalues;
+	closure->upvalueCount = function->upvalueCount;
+	return closure;
+}
+
 ObjFunction* newFunction(VM* vm) {
-	ObjFunction* function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
+	ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
 	function->arity = 0;
+	function->upvalueCount = 0;
 	function->name = NULL;
 	initChunk(&function->chunk);
 	return function;
 }
 
 ObjNative* newNative(VM* vm, NativeFn function) {
-	ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
+	ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
 	native->function = function;
 	return native;
 }
 
 static ObjString* allocateString(VM* vm, char* chars, int length, uint32_t hash) {
-	ObjString* string = ALLOCATE_OBJ(vm, ObjString, OBJ_STRING);
+	ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
 	string->length = length;
 	string->chars = chars;
 	string->hash = hash;
@@ -99,18 +113,10 @@ ObjString* copyEscapeString(VM* vm, const char* chars, int length) {
 		if (chars[i] == '\\') {
 			i++;
 			switch (chars[i]) {
-			case 'n':
-				heapChars[index++] = '\n';
-				break;
-			case 'r':
-				heapChars[index++] = '\r';
-				break;
-			case 't':
-				heapChars[index++] = '\t';
-				break;
-			default:
-				heapChars[index++] = chars[i];
-				break;
+			case 'n': heapChars[index++] = '\n'; break;
+			case 'r': heapChars[index++] = '\r'; break;
+			case 't': heapChars[index++] = '\t'; break;
+			default:  heapChars[index++] = chars[i]; break;
 			}
 		}
 		else {
@@ -119,6 +125,12 @@ ObjString* copyEscapeString(VM* vm, const char* chars, int length) {
 	}
 	heapChars[escapedLength] = '\0';
 	return takeString(vm, heapChars, escapedLength);
+}
+
+ObjUpvalue* newUpvalue(VM* vm, Value* slot) {
+	ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+	upvalue->location = slot;
+	return upvalue;
 }
 
 static void resetStack(VM* vm) {
@@ -135,7 +147,7 @@ static void runtimeError(VM* vm, const char* format, ...) {
 
 	for (int i = vm->frameCount - 1; i >= 0; i--) {
 		CallFrame* frame = &vm->frames[i];
-		ObjFunction* function = frame->function;
+		ObjFunction* function = frame->closure->function;
 		size_t instruction = frame->ip - function->chunk.code - 1;
 		fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
 		if (function->name == NULL) {
@@ -203,9 +215,9 @@ static Value peek(VM* vm, int distance) {
 	return vm->stackTop[-1 - distance];
 }
 
-static bool call(VM* vm, ObjFunction* function, int argCount) {
-	if (argCount != function->arity) {
-		runtimeError(vm, "Expected %d arguments but got %d.", function->arity, argCount);
+static bool call(VM* vm, ObjClosure* closure, int argCount) {
+	if (argCount != closure->function->arity) {
+		runtimeError(vm, "Expected %d arguments but got %d.", closure->function->arity, argCount);
 		return false;
 	}
 
@@ -215,8 +227,8 @@ static bool call(VM* vm, ObjFunction* function, int argCount) {
 	}
 
 	CallFrame* frame = &vm->frames[vm->frameCount++];
-	frame->function = function;
-	frame->ip = function->chunk.code;
+	frame->closure = closure;
+	frame->ip = closure->function->chunk.code;
 	frame->slots = vm->stackTop - argCount - 1;
 	return true;
 }
@@ -224,7 +236,7 @@ static bool call(VM* vm, ObjFunction* function, int argCount) {
 static bool callValue(VM* vm, Value callee, int argCount) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
-		case OBJ_FUNCTION: return call(vm, AS_FUNCTION(callee), argCount);
+		case OBJ_CLOSURE: return call(vm, AS_CLOSURE(callee), argCount);
 		case OBJ_NATIVE: {
 			NativeFn native = AS_NATIVE(callee);
 			Value result = native(argCount, vm->stackTop - argCount);
@@ -236,6 +248,11 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 	}
 	runtimeError(vm, "Can only call functions and classes.");
 	return false;
+}
+
+static ObjUpvalue* captureUpvalue(VM* vm, Value* local) {
+	ObjUpvalue* createdUpvalue = newUpvalue(vm, local);
+	return createdUpvalue;
 }
 
 static bool isFalsey(Value value) {
@@ -275,7 +292,7 @@ static InterpretResult run(VM* vm) {
 #define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() \
 	(frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op) \
 	do { \
@@ -315,6 +332,16 @@ static InterpretResult run(VM* vm) {
 		} \
 		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
 	} while (false)
+#define UPVALUE_NUM_OP_ASSIGN(op) \
+	do { \
+		uint8_t index = READ_BYTE(); \
+		Value* value = frame->closure->upvalues[index]->location; \
+		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
+			runtimeError(vm, "Operands must be numbers."); \
+			return INTERPRET_RUNTIME_ERROR; \
+		} \
+		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
+	} while (false)
 
 	for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -326,7 +353,8 @@ static InterpretResult run(VM* vm) {
 		}
 		printf("\n");
 
-		disassembleInstruction(&frame->function->chunk, (int)(frame->ip - frame->function->chunk.code));
+		disassembleInstruction(&frame->closure->function->chunk,
+			(int)(frame->ip - frame->closure->function->chunk.code));
 #endif
 
 		uint8_t instruction;
@@ -465,6 +493,44 @@ static InterpretResult run(VM* vm) {
 			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
+		case OP_GET_UPVALUE: {
+			uint8_t index = READ_BYTE();
+			push(vm, *frame->closure->upvalues[index]->location);
+			break;
+		}
+		case OP_SET_UPVALUE: {
+			uint8_t index = READ_BYTE();
+			*frame->closure->upvalues[index]->location = pop(vm);
+			break;
+		}
+		case OP_ADD_SET_UPVALUE: {
+			uint8_t index = READ_BYTE();
+			Value* value = frame->closure->upvalues[index]->location;
+			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
+				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
+			}
+			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
+				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
+			}
+			else {
+				runtimeError(vm, "Operands must both be numbers or strings.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_SUBTRACT_SET_UPVALUE:	UPVALUE_NUM_OP_ASSIGN(-= ); break;
+		case OP_MULTIPLY_SET_UPVALUE:	UPVALUE_NUM_OP_ASSIGN(*= ); break;
+		case OP_DIVIDE_SET_UPVALUE:		UPVALUE_NUM_OP_ASSIGN(/= ); break;
+		case OP_MODULUS_SET_UPVALUE: {
+			uint8_t index = READ_BYTE();
+			Value* value = frame->closure->upvalues[index]->location;
+			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
+				runtimeError(vm, "Operands must be numbers.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
+			break;
+		}
 		case OP_EQUAL: {
 			Value b = pop(vm);
 			Value a = pop(vm);
@@ -557,6 +623,22 @@ static InterpretResult run(VM* vm) {
 			frame = &vm->frames[vm->frameCount - 1];
 			break;
 		}
+		case OP_CLOSURE: {
+			ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+			ObjClosure* closure = newClosure(vm, function);
+			push(vm, OBJ_VAL(closure));
+			for (int i = 0; i < closure->upvalueCount; i++) {
+				uint8_t isLocal = READ_BYTE();
+				uint8_t index = READ_BYTE();
+				if (isLocal) {
+					closure->upvalues[i] = captureUpvalue(vm, frame->slots + index);
+				}
+				else {
+					closure->upvalues[i] = frame->closure->upvalues[index];
+				}
+			}
+			break;
+		}
 		case OP_RETURN: {
 			Value result = pop(vm);
 			vm->frameCount--;
@@ -580,6 +662,7 @@ static InterpretResult run(VM* vm) {
 #undef BINARY_OP
 #undef GLOBAL_NUM_OP_ASSIGN
 #undef LOCAL_NUM_OP_ASSIGN
+#undef UPVALUE_NUM_OP_ASSIGN
 }
 
 InterpretResult interpret(VM* vm, const char* source) {
@@ -587,7 +670,10 @@ InterpretResult interpret(VM* vm, const char* source) {
 	if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
 	push(vm, OBJ_VAL(function));
-	call(vm, function, 0);
+	ObjClosure* closure = newClosure(vm, function);
+	pop(vm);
+	push(vm, OBJ_VAL(closure));
+	call(vm, closure, 0);
 
 	return run(vm);
 }

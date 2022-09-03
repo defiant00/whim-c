@@ -1,11 +1,14 @@
 // simple test file
 
-fib :: fn(n)
-	if n < 2 return n /if
-	return fib(n - 2) + fib(n - 1)
+outer :: fn ()
+  x := 14
+  inner :: fn()
+    x += 5
+    print(x, '\n')
+    x %= 3
+  /fn
+  print(x, '\n')
+  inner()
+  print(x, '\n')
 /fn
-
-start :: time()
-fib(5)
-print(' ** elapsed: ', time() - start, 's\n',)
-
+outer()

@@ -33,6 +33,11 @@ typedef struct {
 } Local;
 
 typedef struct {
+	uint8_t index;
+	bool isLocal;
+} Upvalue;
+
+typedef struct {
 	int start;
 	int exit;
 	int depth;
@@ -54,6 +59,7 @@ typedef struct Compiler {
 	int nameLength;
 	Local locals[UINT8_COUNT];
 	int localCount;
+	Upvalue upvalues[UINT8_COUNT];
 	Loop loops[MAX_LOOP];
 	int loopCount;
 	int scopeDepth;

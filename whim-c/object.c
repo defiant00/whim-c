@@ -15,6 +15,9 @@ static void printFunction(ObjFunction* function) {
 
 void printObject(Value value) {
 	switch (OBJ_TYPE(value)) {
+	case OBJ_CLOSURE:
+		printFunction(AS_CLOSURE(value)->function);
+		break;
 	case OBJ_FUNCTION:
 		printFunction(AS_FUNCTION(value));
 		break;
@@ -23,6 +26,9 @@ void printObject(Value value) {
 		break;
 	case OBJ_STRING:
 		printf("%s", AS_CSTRING(value));
+		break;
+	case OBJ_UPVALUE:
+		printf("upvalue");
 		break;
 	}
 }

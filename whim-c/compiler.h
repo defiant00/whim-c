@@ -30,6 +30,7 @@ typedef struct {
 	Token name;
 	bool constant;
 	int depth;
+	bool isCaptured;
 } Local;
 
 typedef struct {

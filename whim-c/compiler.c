@@ -29,6 +29,7 @@ static void initCompiler(Compiler* compiler, FunctionType type, VM* vm, Parser* 
 
 	Local* local = &compiler->locals[compiler->localCount++];
 	local->depth = 0;
+	local->isCaptured = false;
 	local->name.start = "";
 	local->name.length = 0;
 }
@@ -265,6 +266,7 @@ static void addLocal(Compiler* compiler, Token identifier, bool constant) {
 	local->name = identifier;
 	local->constant = constant;
 	local->depth = -1;
+	local->isCaptured = false;
 }
 
 static void markInitialized(Compiler* compiler) {
@@ -580,6 +582,12 @@ static void expressionStatement(Compiler* compiler) {
 			if (compiler->scopeDepth > 0) {
 				declareLocal(compiler, &compiler->parser->previous, constant);
 				advance(compiler);	// accept :: :=
+
+				// mark initialized if it's a function so it can recursively call itself
+				if (compiler->parser->current.type == TOKEN_FN) {
+					markInitialized(compiler);
+				}
+
 				expression(compiler);
 				markInitialized(compiler);
 			}

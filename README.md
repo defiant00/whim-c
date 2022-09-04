@@ -75,8 +75,8 @@ MyClass :: class is Parent      // optional inheritance
 
   // constructor
   new :: fn(self, x, y)
-    self.base(x, y)       // call the base type constructor, passing in self (by using self.)
-                          // so it does not create a new object
+    self.base.new(self, x, y)   // self.base(params) would create a new object, so instead
+                                // explicitly call new with the current instance
     self.x := x
     self.y := y
   /fn
@@ -107,7 +107,7 @@ MyClass :: class is Parent      // optional inheritance
   /fn
 /class
 
-// initialization is just the class used as a function,
+// initialization is just the type used as a function,
 // this automatically creates a new instance and passes it in as the first argument
 myInst :: MyClass(1, 2)
 
@@ -187,7 +187,6 @@ compiled: *.whir
 * op pop n
 * separate sized jumps
 * have exit jumps jump straight to the end instead of chaining
-* recursive function calls
 * don't emit (nil and return) if the last line is already a return
 * ip in a local and flag it as a register
 * error reporting from native code

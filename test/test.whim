@@ -1,14 +1,14 @@
 // simple test file
 
-outer :: fn ()
-  x := 14
+outer :: fn()
+  x := 'outside'
   inner :: fn()
-    x += 5
-    print(x, '\n')
-    x %= 3
+    print(x)
   /fn
-  print(x, '\n')
-  inner()
-  print(x, '\n')
+
+  return inner
 /fn
-outer()
+
+closure := outer()
+closure()
+

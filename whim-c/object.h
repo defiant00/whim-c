@@ -17,6 +17,8 @@
 #define AS_STRING(value)	((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)	(((ObjString*)AS_OBJ(value))->chars)
 
+typedef struct VM VM;
+
 typedef enum {
 	OBJ_CLOSURE,
 	OBJ_FUNCTION,
@@ -66,6 +68,13 @@ typedef struct {
 	int upvalueCount;
 } ObjClosure;
 
+ObjClosure* newClosure(VM* vm, ObjFunction* function);
+ObjFunction* newFunction(VM* vm);
+ObjNative* newNative(VM* vm, NativeFn function);
+ObjString* takeString(VM* vm, char* chars, int length);
+ObjString* copyString(VM* vm, const char* chars, int length);
+ObjString* copyEscapeString(VM* vm, const char* chars, int length);
+ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {

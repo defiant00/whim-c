@@ -14,7 +14,7 @@ typedef struct {
 	Value* slots;
 } CallFrame;
 
-typedef struct {
+struct VM {
 	CallFrame frames[FRAMES_MAX];
 	int frameCount;
 	Value stack[STACK_MAX];
@@ -23,7 +23,7 @@ typedef struct {
 	Table strings;
 	ObjUpvalue* openUpvalues;
 	Obj* objects;
-} VM;
+};
 
 typedef enum {
 	INTERPRET_OK,
@@ -36,13 +36,5 @@ void freeVM(VM* vm);
 InterpretResult interpret(VM* vm, const char* source);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
-
-ObjClosure* newClosure(VM* vm, ObjFunction* function);
-ObjFunction* newFunction(VM* vm);
-ObjNative* newNative(VM* vm, NativeFn function);
-ObjString* takeString(VM* vm, char* chars, int length);
-ObjString* copyString(VM* vm, const char* chars, int length);
-ObjString* copyEscapeString(VM* vm, const char* chars, int length);
-ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 
 #endif

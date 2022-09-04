@@ -93,7 +93,7 @@ static bool match(Compiler* compiler, TokenType type) {
 }
 
 static void emitByte(Compiler* compiler, uint8_t byte) {
-	writeChunk(currentChunk(compiler), byte, compiler->parser->previous.line);
+	writeChunk(compiler->vm, currentChunk(compiler), byte, compiler->parser->previous.line);
 }
 
 static void emitBytes(Compiler* compiler, uint8_t byte1, uint8_t byte2) {
@@ -124,7 +124,7 @@ static void emitReturn(Compiler* compiler) {
 }
 
 static uint8_t makeConstant(Compiler* compiler, Value value) {
-	int constant = addConstant(currentChunk(compiler), value);
+	int constant = addConstant(compiler->vm, currentChunk(compiler), value);
 	if (constant > UINT8_MAX) {
 		error(compiler, "Too many constants in one chunk.");
 		return 0;

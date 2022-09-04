@@ -14,7 +14,7 @@ void initTable(Table* table) {
 	table->entries = NULL;
 }
 
-void freeTable(Table* table) {
+void freeTable(VM* vm, Table* table) {
 	FREE_ARRAY(Entry, table->entries, table->capacity);
 	initTable(table);
 }
@@ -64,7 +64,7 @@ bool tableGetPtr(Table* table, ObjString* key, Value** value) {
 	return true;
 }
 
-static void adjustCapacity(Table* table, int capacity) {
+static void adjustCapacity(VM* vm, Table* table, int capacity) {
 	Entry* entries = ALLOCATE(Entry, capacity);
 	for (int i = 0; i < capacity; i++) {
 		entries[i].key = NULL;
@@ -87,10 +87,10 @@ static void adjustCapacity(Table* table, int capacity) {
 	table->capacity = capacity;
 }
 
-bool tableSet(Table* table, ObjString* key, Value value) {
+bool tableSet(VM* vm, Table* table, ObjString* key, Value value) {
 	if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
 		int capacity = GROW_CAPACITY(table->capacity);
-		adjustCapacity(table, capacity);
+		adjustCapacity(vm, table, capacity);
 	}
 
 	Entry* entry = findEntry(table->entries, table->capacity, key);
@@ -104,10 +104,10 @@ bool tableSet(Table* table, ObjString* key, Value value) {
 }
 
 // adds an item if it doesn't already exist, and returns whether the add succeeded
-bool tableAdd(Table* table, ObjString* key, Value value) {
+bool tableAdd(VM* vm, Table* table, ObjString* key, Value value) {
 	if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
 		int capacity = GROW_CAPACITY(table->capacity);
-		adjustCapacity(table, capacity);
+		adjustCapacity(vm, table, capacity);
 	}
 
 	Entry* entry = findEntry(table->entries, table->capacity, key);
@@ -135,11 +135,11 @@ bool tableDelete(Table* table, ObjString* key) {
 	return true;
 }
 
-void tableAddAll(Table* from, Table* to) {
+void tableAddAll(VM* vm, Table* from, Table* to) {
 	for (int i = 0; i < from->capacity; i++) {
 		Entry* entry = &from->entries[i];
 		if (entry->key != NULL) {
-			tableSet(to, entry->key, entry->value);
+			tableSet(vm, to, entry->key, entry->value);
 		}
 	}
 }

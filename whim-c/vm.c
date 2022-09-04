@@ -47,7 +47,7 @@ static void runtimeError(VM* vm, const char* format, ...) {
 static void defineNative(VM* vm, const char* name, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, (int)strlen(name))));
 	push(vm, OBJ_VAL(newNative(vm, function)));
-	tableSet(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+	tableSet(vm, &vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
 	pop(vm);
 	pop(vm);
 }
@@ -74,8 +74,8 @@ void initVM(VM* vm) {
 }
 
 void freeVM(VM* vm) {
-	freeTable(&vm->globals);
-	freeTable(&vm->strings);
+	freeTable(vm, &vm->globals);
+	freeTable(vm, &vm->strings);
 	freeObjects(vm);
 }
 
@@ -278,7 +278,7 @@ static InterpretResult run(VM* vm) {
 		case OP_POP: pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
-			if (!tableAdd(&vm->globals, name, AS_CONST(peek(vm, 0)))) {
+			if (!tableAdd(vm, &vm->globals, name, AS_CONST(peek(vm, 0)))) {
 				runtimeError(vm, "Global '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -287,7 +287,7 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_DEFINE_GLOBAL_VAR: {
 			ObjString* name = READ_STRING();
-			if (!tableAdd(&vm->globals, name, AS_VAR(peek(vm, 0)))) {
+			if (!tableAdd(vm, &vm->globals, name, AS_VAR(peek(vm, 0)))) {
 				runtimeError(vm, "Global '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}

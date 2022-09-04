@@ -4,7 +4,13 @@
 #include "object.h"
 #include "vm.h"
 
-void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+void* reallocate(VM* vm, void* pointer, size_t oldSize, size_t newSize) {
+	if (newSize > oldSize) {
+#ifdef DEBUG_STRESS_GC
+		collectGarbage(vm);
+#endif
+	}
+
 	if (newSize == 0) {
 		free(pointer);
 		return NULL;
@@ -15,7 +21,7 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 	return result;
 }
 
-static void freeObject(Obj* object) {
+static void freeObject(VM* vm, Obj* object) {
 	switch (object->type) {
 	case OBJ_CLOSURE: {
 		ObjClosure* closure = (ObjClosure*)object;
@@ -25,7 +31,7 @@ static void freeObject(Obj* object) {
 	}
 	case OBJ_FUNCTION: {
 		ObjFunction* function = (ObjFunction*)object;
-		freeChunk(&function->chunk);
+		freeChunk(vm, &function->chunk);
 		FREE(ObjFunction, object);
 		break;
 	}
@@ -44,11 +50,15 @@ static void freeObject(Obj* object) {
 	}
 }
 
+void collectGarbage(VM* vm) {
+
+}
+
 void freeObjects(VM* vm) {
 	Obj* object = vm->objects;
 	while (object != NULL) {
 		Obj* next = object->next;
-		freeObject(object);
+		freeObject(vm, object);
 		object = next;
 	}
 }

@@ -11,14 +11,14 @@ void initChunk(Chunk* chunk) {
 	initValueArray(&chunk->constants);
 }
 
-void freeChunk(Chunk* chunk) {
+void freeChunk(VM* vm, Chunk* chunk) {
 	FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
 	FREE_ARRAY(int, chunk->lines, chunk->capacity);
-	freeValueArray(&chunk->constants);
+	freeValueArray(vm, &chunk->constants);
 	initChunk(chunk);
 }
 
-void writeChunk(Chunk* chunk, uint8_t byte, int line) {
+void writeChunk(VM* vm, Chunk* chunk, uint8_t byte, int line) {
 	if (chunk->capacity < chunk->count + 1) {
 		int oldCapacity = chunk->capacity;
 		chunk->capacity = GROW_CAPACITY(oldCapacity);
@@ -31,7 +31,7 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line) {
 	chunk->count++;
 }
 
-int addConstant(Chunk* chunk, Value value) {
-	writeValueArray(&chunk->constants, value);
+int addConstant(VM* vm, Chunk* chunk, Value value) {
+	writeValueArray(vm, &chunk->constants, value);
 	return chunk->constants.count - 1;
 }

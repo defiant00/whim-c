@@ -191,3 +191,4 @@ compiled: *.whir
 * ip in a local and flag it as a register
 * error reporting from native code
 * closures only for functions that need it?
+* loop var new per item/closure

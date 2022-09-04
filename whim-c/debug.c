@@ -116,6 +116,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 
 		return offset;
 	}
+	case OP_CLOSE_UPVALUE:			return simpleInstruction("close upvalue", offset);
 	case OP_RETURN:					return simpleInstruction("return", offset);
 	default:
 		printf("Unknown opcode %d\n", instruction);

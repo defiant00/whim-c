@@ -190,3 +190,4 @@ compiled: *.whir
 * don't emit (nil and return) if the last line is already a return
 * ip in a local and flag it as a register
 * error reporting from native code
+* closures only for functions that need it?

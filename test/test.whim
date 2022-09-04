@@ -1,14 +1,16 @@
 // simple test file
 
-outer :: fn()
-  x := 'outside'
-  inner :: fn()
-    print(x)
-  /fn
-
-  return inner
+test :: fn(x, y)
+	inner := nil
+	do
+		a := 1
+		b := 2
+		c := 'yay'
+		inner = fn()
+			print(x, ' ', y, ' ', c, '\n')
+		/fn
+	/do
+	return inner
 /fn
 
-closure := outer()
-closure()
-
+test(2, 3)()

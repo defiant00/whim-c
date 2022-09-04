@@ -172,7 +172,12 @@ static void endScope(Compiler* compiler) {
 
 	while (compiler->localCount > 0 &&
 		compiler->locals[compiler->localCount - 1].depth > compiler->scopeDepth) {
-		emitByte(compiler, OP_POP);
+		if (compiler->locals[compiler->localCount - 1].isCaptured) {
+			emitByte(compiler, OP_CLOSE_UPVALUE);
+		}
+		else {
+			emitByte(compiler, OP_POP);
+		}
 		compiler->localCount--;
 	}
 }
@@ -235,6 +240,7 @@ static int resolveUpvalue(Compiler* compiler, Token* identifier) {
 
 	int local = resolveLocal(compiler->enclosing, identifier);
 	if (local != -1) {
+		compiler->enclosing->locals[local].isCaptured = true;
 		return addUpvalue(compiler, (uint8_t)local, true);
 	}
 
@@ -574,7 +580,10 @@ static void expressionStatement(Compiler* compiler) {
 		switch (compiler->parser->current.type) {
 		case TOKEN_COLON_COLON:
 		case TOKEN_COLON_EQUAL: {
+			// declaration
+
 			bool constant = compiler->parser->current.type == TOKEN_COLON_COLON;
+
 			compiler->isNamedDeclaration = true;
 			compiler->nameStart = compiler->parser->previous.start;
 			compiler->nameLength = compiler->parser->previous.length;
@@ -607,6 +616,11 @@ static void expressionStatement(Compiler* compiler) {
 		case TOKEN_SLASH_EQUAL:
 		case TOKEN_PERCENT_EQUAL: {
 			// assignment
+
+			compiler->isNamedDeclaration = true;
+			compiler->nameStart = compiler->parser->previous.start;
+			compiler->nameLength = compiler->parser->previous.length;
+
 			int arg = resolveLocal(compiler, &compiler->parser->previous);
 
 			uint8_t op;

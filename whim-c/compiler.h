@@ -3,10 +3,10 @@
 
 #include "object.h"
 #include "scanner.h"
-#include "vm.h"
+
+typedef struct VM VM;
 
 typedef struct {
-	Scanner* scanner;
 	Token current;
 	Token previous;
 	bool hadError;
@@ -51,8 +51,6 @@ typedef enum {
 
 typedef struct Compiler {
 	struct Compiler* enclosing;
-	VM* vm;
-	Parser* parser;
 	ObjFunction* function;
 	FunctionType type;
 	bool isNamedDeclaration;
@@ -66,7 +64,7 @@ typedef struct Compiler {
 	int scopeDepth;
 } Compiler;
 
-typedef void(*ParseFn)(Compiler*);
+typedef void(*ParseFn)(VM*);
 
 typedef struct {
 	ParseFn prefix;
@@ -75,5 +73,6 @@ typedef struct {
 } ParseRule;
 
 ObjFunction* compile(VM* vm, const char* source);
+void markCompilerRoots(VM* vm);
 
 #endif

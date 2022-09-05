@@ -1,6 +1,7 @@
 #ifndef whimsy_vm_h
 #define whimsy_vm_h
 
+#include "compiler.h"
 #include "object.h"
 #include "table.h"
 #include "value.h"
@@ -23,6 +24,9 @@ struct VM {
 	Table strings;
 	ObjUpvalue* openUpvalues;
 	Obj* objects;
+	Compiler* compiler;
+	Parser parser;
+	Scanner scanner;
 };
 
 typedef enum {

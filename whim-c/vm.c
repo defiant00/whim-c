@@ -66,6 +66,7 @@ static Value nativeTime(int argCount, Value* args) {
 void initVM(VM* vm) {
 	resetStack(vm);
 	vm->objects = NULL;
+	vm->compiler = NULL;
 	initTable(&vm->globals);
 	initTable(&vm->strings);
 

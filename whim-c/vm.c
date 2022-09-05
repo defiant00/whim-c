@@ -67,6 +67,10 @@ void initVM(VM* vm) {
 	resetStack(vm);
 	vm->objects = NULL;
 	vm->compiler = NULL;
+	vm->grayCount = 0;
+	vm->grayCapacity = 0;
+	vm->grayStack = NULL;
+
 	initTable(&vm->globals);
 	initTable(&vm->strings);
 

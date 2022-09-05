@@ -21,8 +21,8 @@
 	reallocate(vm, pointer, sizeof(type) * (oldCount), 0)
 
 void* reallocate(VM* vm, void* pointer, size_t oldSize, size_t newSize);
-void markObject(Obj* object);
-void markValue(Value value);
+void markObject(VM* vm, Obj* object);
+void markValue(VM* vm, Value value);
 void collectGarbage(VM* vm);
 void freeObjects(VM* vm);
 

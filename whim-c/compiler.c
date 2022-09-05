@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "compiler.h"
+#include "memory.h"
 #include "vm.h"
 
 #ifdef DEBUG_PRINT_CODE
@@ -884,5 +885,9 @@ ObjFunction* compile(VM* vm, const char* source) {
 }
 
 void markCompilerRoots(VM* vm) {
-
+	Compiler* comp = vm->compiler;
+	while (comp != NULL) {
+		markObject(vm, (Obj*)comp->function);
+		comp = comp->enclosing;
+	}
 }

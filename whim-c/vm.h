@@ -27,6 +27,9 @@ struct VM {
 	Compiler* compiler;
 	Parser parser;
 	Scanner scanner;
+	int grayCount;
+	int grayCapacity;
+	Obj** grayStack;
 };
 
 typedef enum {

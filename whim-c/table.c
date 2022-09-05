@@ -164,10 +164,10 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
 	}
 }
 
-void markTable(Table* table) {
+void markTable(VM* vm, Table* table) {
 	for (int i = 0; i < table->capacity; i++) {
 		Entry* entry = &table->entries[i];
-		markObject((Obj*)entry->key);
-		markValue(entry->value);
+		markObject(vm, (Obj*)entry->key);
+		markValue(vm, entry->value);
 	}
 }

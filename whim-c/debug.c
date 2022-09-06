@@ -56,8 +56,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_TRUE:					return simpleInstruction("true", offset);
 	case OP_FALSE:					return simpleInstruction("false", offset);
 	case OP_POP:					return simpleInstruction("pop", offset);
-	case OP_DEFINE_GLOBAL_CONST:	return constantInstruction("def g.const", chunk, offset);
-	case OP_DEFINE_GLOBAL_VAR:		return constantInstruction("def g.var", chunk, offset);
+	case OP_DEFINE_GLOBAL_CONST:	return constantInstruction("def global const", chunk, offset);
+	case OP_DEFINE_GLOBAL_VAR:		return constantInstruction("def global var", chunk, offset);
 	case OP_GET_GLOBAL:				return constantInstruction("get global", chunk, offset);
 	case OP_SET_GLOBAL:				return constantInstruction("set global", chunk, offset);
 	case OP_ADD_SET_GLOBAL:			return constantInstruction("add set global", chunk, offset);
@@ -118,6 +118,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	}
 	case OP_CLOSE_UPVALUE:			return simpleInstruction("close upvalue", offset);
 	case OP_RETURN:					return simpleInstruction("return", offset);
+	case OP_CLASS:					return constantInstruction("class", chunk, offset);
+	case OP_ANON_CLASS:				return simpleInstruction("anon class", offset);
 	default:
 		printf("Unknown opcode %d\n", instruction);
 		return offset + 1;

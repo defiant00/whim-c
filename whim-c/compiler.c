@@ -382,6 +382,18 @@ static void function(VM* vm) {
 	}
 }
 
+static void class_expr(VM* vm) {
+	if (vm->compiler->isNamedDeclaration) {
+		uint8_t nameConstant = makeConstant(vm, OBJ_VAL(copyString(vm, vm->compiler->nameStart, vm->compiler->nameLength)));
+		emitBytes(vm, OP_CLASS, nameConstant);
+	}
+	else {
+		emitByte(vm, OP_ANON_CLASS);
+	}
+
+	consume(vm, TOKEN_CLASS_END, "Expect '/class' after block.");
+}
+
 static void literal(VM* vm) {
 	switch (vm->parser.previous.type) {
 	case TOKEN_FALSE:	emitByte(vm, OP_FALSE); break;
@@ -486,7 +498,7 @@ ParseRule rules[] = {
 	[TOKEN_AND] = {				NULL,		and_expr,	PREC_AND},
 	[TOKEN_BREAK] = {			NULL,		NULL,		PREC_NONE},
 	[TOKEN_CATCH] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_CLASS] = {			NULL,		NULL,		PREC_NONE},
+	[TOKEN_CLASS] = {			class_expr,	NULL,		PREC_NONE},
 	[TOKEN_CONTINUE] = {		NULL,		NULL,		PREC_NONE},
 	[TOKEN_DO] = {				NULL,		NULL,		PREC_NONE},
 	[TOKEN_ELSE] = {			NULL,		NULL,		PREC_NONE},
@@ -598,6 +610,8 @@ static void expressionStatement(VM* vm) {
 				advance(vm);	// accept :: :=
 
 				// mark initialized if it's a function so it can recursively call itself
+
+				// TODO - class as well?
 				if (vm->parser.current.type == TOKEN_FN) {
 					markInitialized(vm);
 				}

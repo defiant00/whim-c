@@ -1,16 +1,8 @@
 // simple test file
 
-test :: fn(x, y)
-	inner := nil
-	do
-		a := 1
-		b := 2
-		c := 'yay'
-		inner = fn()
-			print(x, ' ', y, ' ', c, '\n')
-		/fn
-	/do
-	return inner
-/fn
+c :: class
+/class
 
-test(2, 3)()
+print(class/class, '\n')
+
+print(c)

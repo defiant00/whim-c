@@ -24,6 +24,12 @@ static Obj* allocateObject(VM* vm, size_t size, ObjType type) {
 	return object;
 }
 
+ObjClass* newClass(VM* vm, ObjString* name) {
+	ObjClass* _class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
+	_class->name = name;
+	return _class;
+}
+
 ObjClosure* newClosure(VM* vm, ObjFunction* function) {
 	ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
 	for (int i = 0; i < function->upvalueCount; i++) {
@@ -149,6 +155,16 @@ static void printFunction(ObjFunction* function) {
 
 void printObject(Value value) {
 	switch (OBJ_TYPE(value)) {
+	case OBJ_CLASS: {
+		ObjClass* _class = AS_CLASS(value);
+		if (_class->name != NULL) {
+			printf("class %s", _class->name->chars);
+		}
+		else {
+			printf("anonymous class");
+		}
+		break;
+	}
 	case OBJ_CLOSURE:
 		printFunction(AS_CLOSURE(value)->function);
 		break;

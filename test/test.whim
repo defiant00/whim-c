@@ -4,5 +4,7 @@ c :: class
 /class
 
 print(class/class, '\n')
+print(class/class(), '\n')
 
-print(c)
+print(c, '\n')
+print(c(), '\n')

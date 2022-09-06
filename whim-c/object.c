@@ -52,6 +52,13 @@ ObjFunction* newFunction(VM* vm) {
 	return function;
 }
 
+ObjInstance* newInstance(VM* vm, ObjClass* _class) {
+	ObjInstance* instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
+	instance->_class = _class;
+	initTable(&instance->fields);
+	return instance;
+}
+
 ObjNative* newNative(VM* vm, NativeFn function) {
 	ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
 	native->function = function;
@@ -165,20 +172,20 @@ void printObject(Value value) {
 		}
 		break;
 	}
-	case OBJ_CLOSURE:
-		printFunction(AS_CLOSURE(value)->function);
+	case OBJ_CLOSURE:	printFunction(AS_CLOSURE(value)->function); break;
+	case OBJ_FUNCTION:	printFunction(AS_FUNCTION(value)); break;
+	case OBJ_INSTANCE: {
+		ObjInstance* instance = AS_INSTANCE(value);
+		if (instance->_class->name != NULL) {
+			printf("%s instance", AS_INSTANCE(value)->_class->name->chars);
+		}
+		else {
+			printf("anonymous class instance");
+		}
 		break;
-	case OBJ_FUNCTION:
-		printFunction(AS_FUNCTION(value));
-		break;
-	case OBJ_NATIVE:
-		printf("<native fn>");
-		break;
-	case OBJ_STRING:
-		printf("%s", AS_CSTRING(value));
-		break;
-	case OBJ_UPVALUE:
-		printf("upvalue");
-		break;
+	}
+	case OBJ_NATIVE:	printf("<native fn>"); break;
+	case OBJ_STRING:	printf("%s", AS_CSTRING(value)); break;
+	case OBJ_UPVALUE:	printf("upvalue"); break;
 	}
 }

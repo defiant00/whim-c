@@ -97,6 +97,12 @@ static void blackenObject(VM* vm, Obj* object) {
 		markArray(vm, &function->chunk.constants);
 		break;
 	}
+	case OBJ_INSTANCE: {
+		ObjInstance* instance = (ObjInstance*)object;
+		markObject(vm, (Obj*)instance->_class);
+		markTable(vm, &instance->fields);
+		break;
+	}
 	case OBJ_UPVALUE:
 		markValue(vm, ((ObjUpvalue*)object)->closed);
 		break;
@@ -123,6 +129,12 @@ static void freeObject(VM* vm, Obj* object) {
 		ObjFunction* function = (ObjFunction*)object;
 		freeChunk(vm, &function->chunk);
 		FREE(ObjFunction, object);
+		break;
+	}
+	case OBJ_INSTANCE: {
+		ObjInstance* instance = (ObjInstance*)object;
+		freeTable(vm, &instance->fields);
+		FREE(ObjInstance, object);
 		break;
 	}
 	case OBJ_NATIVE:

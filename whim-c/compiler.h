@@ -65,8 +65,11 @@ typedef struct Compiler {
 } Compiler;
 
 typedef void(*ParseFn)(VM*);
+typedef bool(*ParsePrimaryFn)(VM*);
 
 typedef struct {
+	ParsePrimaryFn primaryPrefix;
+	ParsePrimaryFn primaryInfix;
 	ParseFn prefix;
 	ParseFn infix;
 	Precedence precedence;

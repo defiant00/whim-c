@@ -349,6 +349,11 @@ static void call(VM* vm) {
 	emitBytes(vm, OP_CALL, argCount);
 }
 
+static bool call_p(VM* vm) {
+	call(vm);
+	return false;
+}
+
 static void function(VM* vm) {
 	Compiler compiler;
 	initCompiler(vm, &compiler, TYPE_FUNCTION);
@@ -408,6 +413,11 @@ static void grouping(VM* vm) {
 	consume(vm, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
+static bool grouping_p(VM* vm) {
+	grouping(vm);
+	return false;
+}
+
 static void number(VM* vm) {
 	double value = strtod(vm->parser.previous.start, NULL);
 	emitConstant(vm, NUMBER_VAL(value));
@@ -448,6 +458,112 @@ static void variable(VM* vm) {
 	namedVariable(vm, vm->parser.previous);
 }
 
+static bool variable_p(VM* vm) {
+	switch (vm->parser.current.type) {
+	case TOKEN_COLON_COLON:
+	case TOKEN_COLON_EQUAL: {
+		// declaration
+
+		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
+
+		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->nameStart = vm->parser.previous.start;
+		vm->compiler->nameLength = vm->parser.previous.length;
+
+		if (vm->compiler->scopeDepth > 0) {
+			declareLocal(vm, &vm->parser.previous, constant);
+			advance(vm);	// accept :: :=
+
+			// mark initialized if it's a function so it can recursively call itself
+
+			// TODO - class as well?
+			if (vm->parser.current.type == TOKEN_FN) {
+				markInitialized(vm);
+			}
+
+			expression(vm);
+			markInitialized(vm);
+		}
+		else {
+			uint8_t arg = identifierConstant(vm, &vm->parser.previous);
+			advance(vm);	// accept :: :=
+			expression(vm);
+			defineGlobal(vm, arg, constant);
+		}
+
+		return true;
+	}
+	case TOKEN_EQUAL:
+	case TOKEN_PLUS_EQUAL:
+	case TOKEN_MINUS_EQUAL:
+	case TOKEN_STAR_EQUAL:
+	case TOKEN_SLASH_EQUAL:
+	case TOKEN_PERCENT_EQUAL: {
+		// assignment
+
+		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->nameStart = vm->parser.previous.start;
+		vm->compiler->nameLength = vm->parser.previous.length;
+
+		int arg = resolveLocal(vm->compiler, &vm->parser.previous);
+
+		uint8_t op;
+		if (arg != -1) {
+			// local
+			if (vm->compiler->locals[arg].constant) {
+				error(vm, "Local is constant.");
+			}
+
+			op = OP_SET_LOCAL;
+			switch (vm->parser.current.type) {
+			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_LOCAL; break;
+			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_LOCAL; break;
+			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_LOCAL; break;
+			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_LOCAL; break;
+			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_LOCAL; break;
+			}
+		}
+		else if ((arg = resolveUpvalue(vm, vm->compiler, &vm->parser.previous)) != -1) {
+			// upvalue
+			Local* local = getUpvalueLocal(vm, arg);
+			if (local->constant) {
+				error(vm, "Local is constant.");
+			}
+
+			op = OP_SET_UPVALUE;
+			switch (vm->parser.current.type) {
+			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_UPVALUE; break;
+			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_UPVALUE; break;
+			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_UPVALUE; break;
+			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_UPVALUE; break;
+			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_UPVALUE; break;
+			}
+		}
+		else {
+			// global
+			arg = identifierConstant(vm, &vm->parser.previous);
+
+			op = OP_SET_GLOBAL;
+			switch (vm->parser.current.type) {
+			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_GLOBAL; break;
+			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_GLOBAL; break;
+			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_GLOBAL; break;
+			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_GLOBAL; break;
+			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_GLOBAL; break;
+			}
+		}
+
+		advance(vm);	// accept = += -= *= /= %=
+		expression(vm);
+		emitBytes(vm, op, (uint8_t)arg);
+		return true;
+	}
+	}
+	// not an assignment, continue parsing the expression
+	variable(vm);
+	return false;
+}
+
 static void unary(VM* vm) {
 	TokenType operatorType = vm->parser.previous.type;
 
@@ -464,67 +580,76 @@ static void unary(VM* vm) {
 }
 
 ParseRule rules[] = {
-	[TOKEN_LEFT_PAREN] = {		grouping,	call,		PREC_CALL},
-	[TOKEN_RIGHT_PAREN] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_LEFT_BRACKET] = {	NULL,		NULL,		PREC_NONE},
-	[TOKEN_RIGHT_BRACKET] = {	NULL,		NULL,		PREC_NONE},
-	[TOKEN_COMMA] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_DOT] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_SEMICOLON] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_UNDERSCORE] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_COLON_COLON] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_BANG] = {			unary,		NULL,		PREC_NONE},
-	[TOKEN_BANG_EQUAL] = {		NULL,		binary,		PREC_EQUALITY},
-	[TOKEN_EQUAL] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_EQUAL_EQUAL] = {		NULL,		binary,		PREC_EQUALITY},
-	[TOKEN_LESS] = {			NULL,		binary,		PREC_COMPARISON},
-	[TOKEN_LESS_EQUAL] = {		NULL,		binary,		PREC_COMPARISON},
-	[TOKEN_GREATER] = {			NULL,		binary,		PREC_COMPARISON},
-	[TOKEN_GREATER_EQUAL] = {	NULL,		binary,		PREC_COMPARISON},
-	[TOKEN_PLUS] = {			NULL,		binary,		PREC_TERM},
-	[TOKEN_PLUS_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_MINUS] = {			unary,		binary,		PREC_TERM},
-	[TOKEN_MINUS_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_STAR] = {			NULL,		binary,		PREC_FACTOR},
-	[TOKEN_STAR_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_SLASH] = {			NULL,		binary,		PREC_FACTOR},
-	[TOKEN_SLASH_EQUAL] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_PERCENT] = {			NULL,		binary,		PREC_FACTOR},
-	[TOKEN_PERCENT_EQUAL] = {	NULL,		NULL,		PREC_NONE},
-	[TOKEN_IDENTIFIER] = {		variable,	NULL,		PREC_NONE},
-	[TOKEN_STRING] = {			string,		NULL,		PREC_NONE},
-	[TOKEN_NUMBER] = {			number,		NULL,		PREC_NONE},
-	[TOKEN_AND] = {				NULL,		and_expr,	PREC_AND},
-	[TOKEN_BREAK] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_CATCH] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_CLASS] = {			class_expr,	NULL,		PREC_NONE},
-	[TOKEN_CONTINUE] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_DO] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_ELSE] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_FALSE] = {			literal,	NULL,		PREC_NONE},
-	[TOKEN_FINALLY] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_FN] = {				function,	NULL,		PREC_NONE},
-	[TOKEN_FOR] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_FROM] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_IF] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_IN] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_IS] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_NIL] = {				literal,	NULL,		PREC_NONE},
-	[TOKEN_OR] = {				NULL,		or_expr,	PREC_OR},
-	[TOKEN_RETURN] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_THROW] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_TRUE] = {			literal,	NULL,		PREC_NONE},
-	[TOKEN_TRY] = {				NULL,		NULL,		PREC_NONE},
-	[TOKEN_CLASS_END] = {		NULL,		NULL,		PREC_NONE},
-	[TOKEN_DO_END] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_FN_END] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_FOR_END] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_IF_END] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_TRY_END] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_ERROR] = {			NULL,		NULL,		PREC_NONE},
-	[TOKEN_EOF] = {				NULL,		NULL,		PREC_NONE},
+	[TOKEN_LEFT_PAREN] = {		grouping_p,	call_p,		grouping,	call,		PREC_CALL},
+	[TOKEN_RIGHT_PAREN] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_LEFT_BRACKET] = {	NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_RIGHT_BRACKET] = {	NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_COMMA] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DOT] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_SEMICOLON] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_UNDERSCORE] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_COLON_COLON] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_COLON_EQUAL] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_BANG] = {			NULL,		NULL,		unary,		NULL,		PREC_NONE},
+	[TOKEN_BANG_EQUAL] = {		NULL,		NULL,		NULL,		binary,		PREC_EQUALITY},
+	[TOKEN_EQUAL] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_EQUAL_EQUAL] = {		NULL,		NULL,		NULL,		binary,		PREC_EQUALITY},
+	[TOKEN_LESS] = {			NULL,		NULL,		NULL,		binary,		PREC_COMPARISON},
+	[TOKEN_LESS_EQUAL] = {		NULL,		NULL,		NULL,		binary,		PREC_COMPARISON},
+	[TOKEN_GREATER] = {			NULL,		NULL,		NULL,		binary,		PREC_COMPARISON},
+	[TOKEN_GREATER_EQUAL] = {	NULL,		NULL,		NULL,		binary,		PREC_COMPARISON},
+	[TOKEN_PLUS] = {			NULL,		NULL,		NULL,		binary,		PREC_TERM},
+	[TOKEN_PLUS_EQUAL] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_MINUS] = {			NULL,		NULL,		unary,		binary,		PREC_TERM},
+	[TOKEN_MINUS_EQUAL] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_STAR] = {			NULL,		NULL,		NULL,		binary,		PREC_FACTOR},
+	[TOKEN_STAR_EQUAL] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_SLASH] = {			NULL,		NULL,		NULL,		binary,		PREC_FACTOR},
+	[TOKEN_SLASH_EQUAL] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_PERCENT] = {			NULL,		NULL,		NULL,		binary,		PREC_FACTOR},
+	[TOKEN_PERCENT_EQUAL] = {	NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IDENTIFIER] = {		variable_p, NULL,		variable,	NULL,		PREC_NONE},
+	[TOKEN_STRING] = {			NULL,		NULL,		string,		NULL,		PREC_NONE},
+	[TOKEN_NUMBER] = {			NULL,		NULL,		number,		NULL,		PREC_NONE},
+	[TOKEN_AND] = {				NULL,		NULL,		NULL,		and_expr,	PREC_AND},
+	[TOKEN_BREAK] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_CATCH] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_CLASS] = {			NULL,		NULL,		class_expr,	NULL,		PREC_NONE},
+	[TOKEN_CONTINUE] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DO] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_ELIF] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_ELSE] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_FALSE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
+	[TOKEN_FINALLY] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_FN] = {				NULL,		NULL,		function,	NULL,		PREC_NONE},
+	[TOKEN_FOR] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_FROM] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IF] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IN] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IS] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_NIL] = {				NULL,		NULL,		literal,	NULL,		PREC_NONE},
+	[TOKEN_OR] = {				NULL,		NULL,		NULL,		or_expr,	PREC_OR},
+	[TOKEN_RETURN] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_THROW] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_TRUE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
+	[TOKEN_TRY] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_CLASS_END] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DO_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_FN_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_FOR_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_IF_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_TRY_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_ERROR] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_EOF] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 };
+
+static void parseInfixPrecedence(VM* vm, Precedence precedence) {
+	while (precedence <= getRule(vm->parser.current.type)->precedence) {
+		advance(vm);
+		ParseFn infixRule = getRule(vm->parser.previous.type)->infix;
+		infixRule(vm);
+	}
+}
 
 static void parsePrecedenceFromPrevious(VM* vm, Precedence precedence) {
 	ParseFn prefixRule = getRule(vm->parser.previous.type)->prefix;
@@ -535,11 +660,7 @@ static void parsePrecedenceFromPrevious(VM* vm, Precedence precedence) {
 
 	prefixRule(vm);
 
-	while (precedence <= getRule(vm->parser.current.type)->precedence) {
-		advance(vm);
-		ParseFn infixRule = getRule(vm->parser.previous.type)->infix;
-		infixRule(vm);
-	}
+	parseInfixPrecedence(vm, precedence);
 }
 
 static void parsePrecedence(VM* vm, Precedence precedence) {
@@ -591,117 +712,26 @@ static void continueStatement(VM* vm) {
 }
 
 static void expressionStatement(VM* vm) {
-	// parse one primary expression and check for declaration or assignment
-	// if not, then parse as a normal expression statement
-	if (match(vm, TOKEN_IDENTIFIER)) {
-		switch (vm->parser.current.type) {
-		case TOKEN_COLON_COLON:
-		case TOKEN_COLON_EQUAL: {
-			// declaration
-
-			bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
-
-			vm->compiler->isNamedDeclaration = true;
-			vm->compiler->nameStart = vm->parser.previous.start;
-			vm->compiler->nameLength = vm->parser.previous.length;
-
-			if (vm->compiler->scopeDepth > 0) {
-				declareLocal(vm, &vm->parser.previous, constant);
-				advance(vm);	// accept :: :=
-
-				// mark initialized if it's a function so it can recursively call itself
-
-				// TODO - class as well?
-				if (vm->parser.current.type == TOKEN_FN) {
-					markInitialized(vm);
-				}
-
-				expression(vm);
-				markInitialized(vm);
-			}
-			else {
-				uint8_t arg = identifierConstant(vm, &vm->parser.previous);
-				advance(vm);	// accept :: :=
-				expression(vm);
-				defineGlobal(vm, arg, constant);
-			}
-
-			break;
-		}
-		case TOKEN_EQUAL:
-		case TOKEN_PLUS_EQUAL:
-		case TOKEN_MINUS_EQUAL:
-		case TOKEN_STAR_EQUAL:
-		case TOKEN_SLASH_EQUAL:
-		case TOKEN_PERCENT_EQUAL: {
-			// assignment
-
-			vm->compiler->isNamedDeclaration = true;
-			vm->compiler->nameStart = vm->parser.previous.start;
-			vm->compiler->nameLength = vm->parser.previous.length;
-
-			int arg = resolveLocal(vm->compiler, &vm->parser.previous);
-
-			uint8_t op;
-			if (arg != -1) {
-				// local
-				if (vm->compiler->locals[arg].constant) {
-					error(vm, "Local is constant.");
-				}
-
-				op = OP_SET_LOCAL;
-				switch (vm->parser.current.type) {
-				case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_LOCAL; break;
-				case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_LOCAL; break;
-				case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_LOCAL; break;
-				case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_LOCAL; break;
-				case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_LOCAL; break;
-				}
-			}
-			else if ((arg = resolveUpvalue(vm, vm->compiler, &vm->parser.previous)) != -1) {
-				// upvalue
-				Local* local = getUpvalueLocal(vm, arg);
-				if (local->constant) {
-					error(vm, "Local is constant.");
-				}
-
-				op = OP_SET_UPVALUE;
-				switch (vm->parser.current.type) {
-				case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_UPVALUE; break;
-				case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_UPVALUE; break;
-				case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_UPVALUE; break;
-				case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_UPVALUE; break;
-				case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_UPVALUE; break;
-				}
-			}
-			else {
-				// global
-				arg = identifierConstant(vm, &vm->parser.previous);
-
-				op = OP_SET_GLOBAL;
-				switch (vm->parser.current.type) {
-				case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_GLOBAL; break;
-				case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_GLOBAL; break;
-				case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_GLOBAL; break;
-				case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_GLOBAL; break;
-				case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_GLOBAL; break;
-				}
-			}
-
-			advance(vm);	// accept = += -= *= /= %=
-			expression(vm);
-			emitBytes(vm, op, (uint8_t)arg);
-			break;
-		}
-		default:
-			// not an assignment, continue parsing the expression
-			expressionFromPrevious(vm);
-			emitByte(vm, OP_POP);
-			break;
-		}
+	advance(vm);
+	ParsePrimaryFn primaryPrefixRule = getRule(vm->parser.previous.type)->primaryPrefix;
+	if (primaryPrefixRule == NULL) {
+		expressionFromPrevious(vm);
+		emitByte(vm, OP_POP);
+		return;
 	}
-	else {
-		expression(vm);
+
+	bool done = primaryPrefixRule(vm);
+
+	// parse the primary expression, checking for assignment
+	while (!done && PREC_CALL <= getRule(vm->parser.current.type)->precedence) {
+		advance(vm);
+		ParsePrimaryFn primaryInfixRule = getRule(vm->parser.previous.type)->primaryInfix;
+		done = primaryInfixRule(vm);
+	}
+
+	// parse any other parts of the expression
+	if (!done) {
+		parseInfixPrecedence(vm, PREC_OR);
 		emitByte(vm, OP_POP);
 	}
 }

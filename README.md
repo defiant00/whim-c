@@ -178,6 +178,7 @@ compiled: *.whir
 * better line number encoding
 * \> 256 constants
 * error handling
+* compiler arrays should not be a fixed size
 * directly load common number opcodes
 * strings - flexible array members
 * support other key types for hash tables
@@ -192,3 +193,5 @@ compiled: *.whir
 * error reporting from native code
 * closures only for functions that need it?
 * loop var new per item/closure
+* more compact object header
+* generational gc

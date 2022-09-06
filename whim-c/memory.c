@@ -10,11 +10,19 @@
 #include "debug.h"
 #endif
 
+#define GC_HEAP_GROW_FACTOR 2
+
 void* reallocate(VM* vm, void* pointer, size_t oldSize, size_t newSize) {
+	vm->bytesAllocated += newSize - oldSize;
+
 	if (newSize > oldSize) {
 #ifdef DEBUG_STRESS_GC
 		collectGarbage(vm);
 #endif
+
+		if (vm->bytesAllocated > vm->nextGC) {
+			collectGarbage(vm);
+		}
 	}
 
 	if (newSize == 0) {
@@ -147,16 +155,46 @@ static void traceReferences(VM* vm) {
 	}
 }
 
+static void sweep(VM* vm) {
+	Obj* previous = NULL;
+	Obj* object = vm->objects;
+	while (object != NULL) {
+		if (object->isMarked) {
+			object->isMarked = false;
+			previous = object;
+			object = object->next;
+		}
+		else {
+			Obj* unreached = object;
+			object = object->next;
+			if (previous != NULL) {
+				previous->next = object;
+			}
+			else {
+				vm->objects = object;
+			}
+			freeObject(vm, unreached);
+		}
+	}
+}
+
 void collectGarbage(VM* vm) {
 #ifdef DEBUG_LOG_GC
 	printf("-- gc begin\n");
+	size_t before = vm->bytesAllocated;
 #endif
 
 	markRoots(vm);
 	traceReferences(vm);
+	tableRemoveWhite(vm, &vm->strings);
+	sweep(vm);
+
+	vm->nextGC = vm->bytesAllocated * GC_HEAP_GROW_FACTOR;
 
 #ifdef DEBUG_LOG_GC
 	printf("-- gc end\n");
+	printf("   collected %zu bytes (from %zu to %zu) next at %zu\n",
+		before - vm->bytesAllocated, before, vm->bytesAllocated, vm->nextGC);
 #endif
 }
 

@@ -23,10 +23,14 @@ struct VM {
 	Table globals;
 	Table strings;
 	ObjUpvalue* openUpvalues;
+	size_t bytesAllocated;
+	size_t nextGC;
 	Obj* objects;
+
 	Compiler* compiler;
 	Parser parser;
 	Scanner scanner;
+
 	int grayCount;
 	int grayCapacity;
 	Obj** grayStack;

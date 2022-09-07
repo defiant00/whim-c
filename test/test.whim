@@ -3,8 +3,9 @@
 c :: class
 /class
 
-print(class/class, '\n')
-print(class/class(), '\n')
-
-print(c, '\n')
-print(c(), '\n')
+i :: c()
+i.first := 'hi'
+i.first += ' there '
+i.c :: 'Constant!'
+i.first += i.c
+print('*** ', i.first, ' ***')

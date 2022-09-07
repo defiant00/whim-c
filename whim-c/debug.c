@@ -56,8 +56,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_TRUE:					return simpleInstruction("true", offset);
 	case OP_FALSE:					return simpleInstruction("false", offset);
 	case OP_POP:					return simpleInstruction("pop", offset);
-	case OP_DEFINE_GLOBAL_CONST:	return constantInstruction("def global const", chunk, offset);
-	case OP_DEFINE_GLOBAL_VAR:		return constantInstruction("def global var", chunk, offset);
+	case OP_DEFINE_GLOBAL_CONST:	return constantInstruction("def const global", chunk, offset);
+	case OP_DEFINE_GLOBAL_VAR:		return constantInstruction("def var global", chunk, offset);
 	case OP_GET_GLOBAL:				return constantInstruction("get global", chunk, offset);
 	case OP_SET_GLOBAL:				return constantInstruction("set global", chunk, offset);
 	case OP_ADD_SET_GLOBAL:			return constantInstruction("add set global", chunk, offset);
@@ -79,6 +79,15 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_MULTIPLY_SET_UPVALUE:	return byteInstruction("mul set upvalue", chunk, offset);
 	case OP_DIVIDE_SET_UPVALUE:		return byteInstruction("div set upvalue", chunk, offset);
 	case OP_MODULUS_SET_UPVALUE:	return byteInstruction("mod set upvalue", chunk, offset);
+	case OP_DEFINE_PROPERTY_CONST:	return constantInstruction("def const property", chunk, offset);
+	case OP_DEFINE_PROPERTY_VAR:	return constantInstruction("def var property", chunk, offset);
+	case OP_GET_PROPERTY:			return constantInstruction("get property", chunk, offset);
+	case OP_SET_PROPERTY:			return constantInstruction("set property", chunk, offset);
+	case OP_ADD_SET_PROPERTY:		return constantInstruction("add set property", chunk, offset);
+	case OP_SUBTRACT_SET_PROPERTY:	return constantInstruction("sub set property", chunk, offset);
+	case OP_MULTIPLY_SET_PROPERTY:	return constantInstruction("mul set property", chunk, offset);
+	case OP_DIVIDE_SET_PROPERTY:	return constantInstruction("div set property", chunk, offset);
+	case OP_MODULUS_SET_PROPERTY:	return constantInstruction("mod set property", chunk, offset);
 	case OP_EQUAL:					return simpleInstruction("equal", offset);
 	case OP_NOT_EQUAL:				return simpleInstruction("not equal", offset);
 	case OP_GREATER:				return simpleInstruction("greater", offset);

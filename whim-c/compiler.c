@@ -299,6 +299,10 @@ static void defineGlobal(VM* vm, uint8_t global, bool constant) {
 	emitBytes(vm, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
 }
 
+static void defineProperty(VM* vm, uint8_t name, bool constant) {
+	emitBytes(vm, constant ? OP_DEFINE_PROPERTY_CONST : OP_DEFINE_PROPERTY_VAR, name);
+}
+
 static uint8_t argumentList(VM* vm) {
 	uint8_t argCount = 0;
 	if (!check(vm, TOKEN_RIGHT_PAREN)) {
@@ -351,6 +355,64 @@ static void call(VM* vm) {
 
 static bool call_p(VM* vm) {
 	call(vm);
+	return false;
+}
+
+static void dot(VM* vm) {
+	consume(vm, TOKEN_IDENTIFIER, "Expect property name after '.'.");
+	uint8_t name = identifierConstant(vm, &vm->parser.previous);
+	emitBytes(vm, OP_GET_PROPERTY, name);
+}
+
+static bool dot_p(VM* vm) {
+	consume(vm, TOKEN_IDENTIFIER, "Expect property name after '.'.");
+	uint8_t name = identifierConstant(vm, &vm->parser.previous);
+
+	switch (vm->parser.current.type) {
+	case TOKEN_COLON_COLON:
+	case TOKEN_COLON_EQUAL: {
+		// declaration
+		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
+
+		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->nameStart = vm->parser.previous.start;
+		vm->compiler->nameLength = vm->parser.previous.length;
+
+		advance(vm);	// accept :: :=
+		expression(vm);
+		defineProperty(vm, name, constant);
+
+		return true;
+	}
+	case TOKEN_EQUAL:
+	case TOKEN_PLUS_EQUAL:
+	case TOKEN_MINUS_EQUAL:
+	case TOKEN_STAR_EQUAL:
+	case TOKEN_SLASH_EQUAL:
+	case TOKEN_PERCENT_EQUAL: {
+		// assignment
+		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->nameStart = vm->parser.previous.start;
+		vm->compiler->nameLength = vm->parser.previous.length;
+
+		uint8_t op = OP_SET_PROPERTY;
+		switch (vm->parser.current.type) {
+		case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_PROPERTY; break;
+		case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_PROPERTY; break;
+		case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_PROPERTY; break;
+		case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_PROPERTY; break;
+		case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_PROPERTY; break;
+		}
+
+		advance(vm);	// accept = += -= *= /= %=
+		expression(vm);
+		emitBytes(vm, op, name);
+
+		return true;
+	}
+	}
+	// not an assignment, so get the property
+	emitBytes(vm, OP_GET_PROPERTY, name);
 	return false;
 }
 
@@ -585,7 +647,7 @@ ParseRule rules[] = {
 	[TOKEN_LEFT_BRACKET] = {	NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_RIGHT_BRACKET] = {	NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COMMA] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
-	[TOKEN_DOT] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_DOT] = {				NULL,		dot_p,		NULL,		dot,		PREC_CALL},
 	[TOKEN_SEMICOLON] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_UNDERSCORE] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_COLON_COLON] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},

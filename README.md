@@ -65,6 +65,16 @@ myFunc :: fn(x, y, z)
 first.func(second)
 func(first, second)
 
+// property access can be by identifier or string, with this setup:
+propName :: 'property'
+i :: instance()
+i.property := 'yay'
+// these are then equivalent:
+i.property
+i.'property'
+i['property']
+i[propName]
+
 // name resolution order: object, type, base type (recursively), global
 
 // blocks end with /block, eg /fn, /if, /for
@@ -195,3 +205,4 @@ compiled: *.whir
 * loop var new per item/closure
 * more compact object header
 * generational gc
+* properties by string

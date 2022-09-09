@@ -149,14 +149,17 @@ set.remove('hi')
 // [] is an empty map
 // items are represented as key (:: or :=) value, and separated by commas, the last of which is optional
 map := [
-  constantVal :: 'hi',
+  1 :: 'ONE',
 
-  var := 3,
+  'constantVal' :: 'hi',
 
-  someFn :: fn
+  'var' := 3,
+
+  'someFn' :: fn
     return 'hello'
   /fn,
 ]
+map[1]        // 'ONE'
 map.var       // 3
 map.someFn()  // 'hello'
 
@@ -172,6 +175,15 @@ map.someFn()  // 'hello'
 1..4: 2   // 1, 3
 4..1: -1  // 4, 3, 2
 
+// looping
+loop
+  // infinite loop
+  break x < 3       // break and continue take an expression
+  continue y > z    // and break or continue if it is truthy
+/loop
+
+for i in item   // creates an iterator from item, and i contains the next value
+/for
 
 // a semicolon is an explicit empty statement for grammar ambiguities
 // this is myList[1]

@@ -126,32 +126,58 @@ myInst :: MyClass(1, 2)
 // base - optional base class
 // new  - optional constructor
 
-// lists are resizable indexable collections of any type
+// lists are resizable indexable collections of any type denoted with ()
+// () is an empty list, (1,) is a list with one item (the comma is required to distinguish it from grouping)
+// (1, 2, 3) items are separated by commas, the final comma is optional
 // indexes start at 0
-list := [1, 2.3, 'hi', myObj, MyClass, myFunc]
+list := (1, 2.3, 'hi', myObj, MyClass, myFunc)
 list[1]        // this is 2.3
 list[2] = 42   // this has now changed from a string to an int
 // negative indexes are equivalent to list.length + index
 list[-1] = 'last item'    // this updates the last item in the list
 
-// Ranges
-[from..to(exclusive)]
-// from always defaults to 0
-// to defaults to item.length if applicable
-list[..] is the whole list
+// sets are unordered and unindexed collections of any type denoted with []
+// sets cannot contain duplicates
+// Set() is the empty set
+set := [1, 3, "hi"]
+set.add("yay")
+set.contains(3)
+set[key]  // equivalent to set.contains[key]
+set.remove('hi')
 
-// a range is stored as start and end and can be iterated
-[1..4].list() == [1, 2, 3, 4]    // convert to a list
-// can specify step
-[1..4, 2]
-[4..1, -1]
+// maps are unordered indexable collections of key/value pairs denoted with []
+// [] is an empty map
+// items are represented as key (:: or :=) value, and separated by commas, the last of which is optional
+map := [
+  constantVal :: 'hi',
+
+  var := 3,
+
+  someFn :: fn
+    return 'hello'
+  /fn,
+]
+map.var       // 3
+map.someFn()  // 'hello'
+
+// Ranges
+[from]..[to(exclusive)] [: step]
+// from defaults to 0
+// to defaults to item.length if applicable
+// step defaults to 1
+1..3      // 1, 2
+..4       // 0, 1, 2, 3
+3..       // 3 to length - 1
+..        // 0 to length - 1
+1..4: 2   // 1, 3
+4..1: -1  // 4, 3, 2
 
 
 // a semicolon is an explicit empty statement for grammar ambiguities
 // this is myList[1]
 myList
 [1]
-// this is two statements, myList and a list literal [1]
+// this is two statements, myList and a set literal [1]
 myList;
 [1]
 
@@ -168,11 +194,12 @@ a
 // function   Function      fn
 // class      Class         class
 // ---------  ---------
-// list       List          []
+// list       List          ()
+// set        Set           [val1, val2]
 // map        Map           [key :: const, key := var, 'string key' :: val]
-// range      Range         [from..to] [from..to, step]
+// range      Range         from..to : step
 
-// Operators: + - * / % ! == != and or :: := = += -= *= /= %= is
+// Operators: + - * / % ! == != and or :: := = += -= *= /= %= is from
 
 // no implicit string conversion
 val := 3 + someStr.num()
@@ -184,7 +211,6 @@ compiled: *.whir
 
 ## TODO
 
-* use `from` or `is` for inheritance?
 * better line number encoding
 * \> 256 constants
 * error handling
@@ -192,10 +218,9 @@ compiled: *.whir
 * directly load common number opcodes
 * strings - flexible array members
 * support other key types for hash tables
-* string hash set (instead of table with nil values) for interning?
+* string hash set (instead of table with nil values) for interning
 * utf8
 * constant deduplication
-* op pop n
 * separate sized jumps
 * have exit jumps jump straight to the end instead of chaining
 * don't emit (nil and return) if the last line is already a return

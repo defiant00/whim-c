@@ -223,6 +223,7 @@ compiled: *.whir
 
 ## TODO
 
+* update loop, break, continue
 * better line number encoding
 * \> 256 constants
 * error handling

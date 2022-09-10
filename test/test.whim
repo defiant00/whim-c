@@ -1,11 +1,25 @@
 // simple test file
 
-outer :: fn(x)
-	inner :: fn()
-		print(x)
+c :: class
+	first :: 1
+	second := 25
+	sub :: class
+		third :: '_erd_'
+	/class
+	func :: fn()
+		print('a func\n')
 	/fn
-	return inner
-/fn
+/class
 
-i :: outer('hey')
-i()
+c.second %= 11
+
+print(c.first, c.second, c.sub.third, '\n')
+c.func()
+
+i :: c()
+i.first :: 11
+i.second := 22
+
+i.second -= 3
+
+print(i.first, i.second, '\n')

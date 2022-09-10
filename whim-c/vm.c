@@ -269,19 +269,16 @@ static InterpretResult run(VM* vm) {
 	} while (false)
 #define PROP_NUM_OP_ASSIGN(op) \
 	do { \
-		if (!IS_INSTANCE(peek(vm, 1))) { \
-			runtimeError(vm, "Only instances have fields."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		ObjInstance* instance = AS_INSTANCE(peek(vm, 1)); \
+		Table* fields; \
+		GET_FIELDS(1); \
 		ObjString* name = READ_STRING(); \
 		Value* value; \
-		if (!tableGetPtr(&instance->fields, name, &value)) { \
-			runtimeError(vm, "Undefined field '%s'.", name->chars); \
+		if (!tableGetPtr(fields, name, &value)) { \
+			runtimeError(vm, "Undefined property '%s'.", name->chars); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
 		if (IS_CONST(*value)) { \
-			runtimeError(vm, "Field '%s' is constant.", name->chars); \
+			runtimeError(vm, "Property '%s' is constant.", name->chars); \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
 		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
@@ -291,6 +288,17 @@ static InterpretResult run(VM* vm) {
 		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
 		pop(vm); \
 	} while (false)
+#define GET_FIELDS(index) \
+	if (IS_INSTANCE(peek(vm, index))) { \
+		fields = &AS_INSTANCE(peek(vm, index))->fields; \
+	} \
+	else if (IS_CLASS(peek(vm, index))) { \
+		fields = &AS_CLASS(peek(vm, index))->fields; \
+	} \
+	else { \
+		runtimeError(vm, "Only classes and instances have properties."); \
+		return INTERPRET_RUNTIME_ERROR; \
+	}
 
 	for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -314,10 +322,11 @@ static InterpretResult run(VM* vm) {
 			push(vm, constant);
 			break;
 		}
-		case OP_NIL: push(vm, NIL_VAL); break;
-		case OP_TRUE: push(vm, BOOL_VAL(true)); break;
-		case OP_FALSE: push(vm, BOOL_VAL(false)); break;
-		case OP_POP: pop(vm); break;
+		case OP_NIL:	push(vm, NIL_VAL); break;
+		case OP_TRUE:	push(vm, BOOL_VAL(true)); break;
+		case OP_FALSE:	push(vm, BOOL_VAL(false)); break;
+		case OP_DUP:	push(vm, peek(vm, 0)); break;
+		case OP_POP:	pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
 			if (!tableAdd(vm, &vm->globals, name, AS_CONST(peek(vm, 0)))) {
@@ -481,15 +490,12 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_DEFINE_PROPERTY_CONST: {
-			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances have fields.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(1);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			ObjString* name = READ_STRING();
-			if (!tableAdd(vm, &instance->fields, name, AS_CONST(peek(vm, 0)))) {
-				runtimeError(vm, "Field '%s' already exists.", name->chars);
+			if (!tableAdd(vm, fields, name, AS_CONST(peek(vm, 0)))) {
+				runtimeError(vm, "Property '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
@@ -497,15 +503,12 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_DEFINE_PROPERTY_VAR: {
-			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances have fields.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(1);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			ObjString* name = READ_STRING();
-			if (!tableAdd(vm, &instance->fields, name, AS_VAR(peek(vm, 0)))) {
-				runtimeError(vm, "Field '%s' already exists.", name->chars);
+			if (!tableAdd(vm, fields, name, AS_VAR(peek(vm, 0)))) {
+				runtimeError(vm, "Property '%s' already exists.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
@@ -513,16 +516,12 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_GET_PROPERTY: {
-			if (!IS_INSTANCE(peek(vm, 0))) {
-				runtimeError(vm, "Only instances have properties.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(0);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 0));
 			ObjString* name = READ_STRING();
-
 			Value value;
-			if (tableGet(&instance->fields, name, &value)) {
+			if (tableGet(fields, name, &value)) {
 				pop(vm);
 				push(vm, value);
 				break;
@@ -532,20 +531,17 @@ static InterpretResult run(VM* vm) {
 			return INTERPRET_RUNTIME_ERROR;
 		}
 		case OP_SET_PROPERTY: {
-			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances have fields.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(1);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			ObjString* name = READ_STRING();
 			Value* value;
-			if (!tableGetPtr(&instance->fields, name, &value)) {
-				runtimeError(vm, "Undefined field '%s'.", name->chars);
+			if (!tableGetPtr(fields, name, &value)) {
+				runtimeError(vm, "Undefined property '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_CONST(*value)) {
-				runtimeError(vm, "Field '%s' is constant.", name->chars);
+				runtimeError(vm, "Property '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			*value = AS_VAR(pop(vm));
@@ -553,20 +549,17 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_ADD_SET_PROPERTY: {
-			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances have fields.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(1);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			ObjString* name = READ_STRING();
 			Value* value;
-			if (!tableGetPtr(&instance->fields, name, &value)) {
-				runtimeError(vm, "Undefined field '%s'.", name->chars);
+			if (!tableGetPtr(fields, name, &value)) {
+				runtimeError(vm, "Undefined property '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_CONST(*value)) {
-				runtimeError(vm, "Field '%s' is constant.", name->chars);
+				runtimeError(vm, "Property '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
@@ -586,20 +579,17 @@ static InterpretResult run(VM* vm) {
 		case OP_MULTIPLY_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(*= ); break;
 		case OP_DIVIDE_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(/= ); break;
 		case OP_MODULUS_SET_PROPERTY: {
-			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances have fields.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
+			Table* fields;
+			GET_FIELDS(1);
 
-			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			ObjString* name = READ_STRING();
 			Value* value;
-			if (!tableGetPtr(&instance->fields, name, &value)) {
-				runtimeError(vm, "Undefined field '%s'.", name->chars);
+			if (!tableGetPtr(fields, name, &value)) {
+				runtimeError(vm, "Undefined property '%s'.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_CONST(*value)) {
-				runtimeError(vm, "Field '%s' is constant.", name->chars);
+				runtimeError(vm, "Property '%s' is constant.", name->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
@@ -751,6 +741,7 @@ static InterpretResult run(VM* vm) {
 #undef LOCAL_NUM_OP_ASSIGN
 #undef UPVALUE_NUM_OP_ASSIGN
 #undef PROP_NUM_OP_ASSIGN
+#undef GET_FIELDS
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

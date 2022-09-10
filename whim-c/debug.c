@@ -55,6 +55,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case OP_NIL:					return simpleInstruction("nil", offset);
 	case OP_TRUE:					return simpleInstruction("true", offset);
 	case OP_FALSE:					return simpleInstruction("false", offset);
+	case OP_DUP:					return simpleInstruction("dup", offset);
 	case OP_POP:					return simpleInstruction("pop", offset);
 	case OP_DEFINE_GLOBAL_CONST:	return constantInstruction("def const global", chunk, offset);
 	case OP_DEFINE_GLOBAL_VAR:		return constantInstruction("def var global", chunk, offset);

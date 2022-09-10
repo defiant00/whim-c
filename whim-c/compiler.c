@@ -448,6 +448,32 @@ static void function(VM* vm) {
 	}
 }
 
+static void class_field(VM* vm) {
+	consume(vm, TOKEN_IDENTIFIER, "Expect field name.");
+	uint8_t name = identifierConstant(vm, &vm->parser.previous);
+
+	switch (vm->parser.current.type) {
+	case TOKEN_COLON_COLON:
+	case TOKEN_COLON_EQUAL: {
+		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
+
+		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->nameStart = vm->parser.previous.start;
+		vm->compiler->nameLength = vm->parser.previous.length;
+
+		// duplicate the class
+		emitByte(vm, OP_DUP);
+
+		advance(vm);	// accept :: :=
+		expression(vm);
+		defineProperty(vm, name, constant);
+
+		return;
+	}
+	}
+	error(vm, "Expect '::' or ':=' declaration.");
+}
+
 static void class_expr(VM* vm) {
 	if (vm->compiler->isNamedDeclaration) {
 		uint8_t nameConstant = makeConstant(vm, OBJ_VAL(copyString(vm, vm->compiler->nameStart, vm->compiler->nameLength)));
@@ -455,6 +481,10 @@ static void class_expr(VM* vm) {
 	}
 	else {
 		emitByte(vm, OP_ANON_CLASS);
+	}
+
+	while (!check(vm, TOKEN_CLASS_END) && !check(vm, TOKEN_EOF)) {
+		class_field(vm);
 	}
 
 	consume(vm, TOKEN_CLASS_END, "Expect '/class' after block.");

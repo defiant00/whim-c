@@ -1,11 +1,11 @@
 // simple test file
 
-c :: class
-/class
+outer :: fn(x)
+	inner :: fn()
+		print(x)
+	/fn
+	return inner
+/fn
 
-i :: c()
-i.first := 'hi'
-i.first += ' there '
-i.c :: 'Constant!'
-i.first += i.c
-print('*** ', i.first, ' ***')
+i :: outer('hey')
+i()

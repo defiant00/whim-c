@@ -115,7 +115,7 @@ static bool call(VM* vm, ObjClosure* closure, int argCount) {
 	CallFrame* frame = &vm->frames[vm->frameCount++];
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
-	frame->slots = vm->stackTop - argCount - 1;
+	frame->slots = vm->stackTop - argCount;
 	return true;
 }
 
@@ -731,7 +731,8 @@ static InterpretResult run(VM* vm) {
 				return INTERPRET_OK;
 			}
 
-			vm->stackTop = frame->slots;
+			// subtract 1 to remove the function as well
+			vm->stackTop = frame->slots - 1;
 			push(vm, result);
 			frame = &vm->frames[vm->frameCount - 1];
 			break;

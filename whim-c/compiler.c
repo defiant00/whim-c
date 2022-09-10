@@ -25,12 +25,6 @@ static void initCompiler(VM* vm, Compiler* compiler, FunctionType type) {
 	compiler->scopeDepth = 0;
 	compiler->function = newFunction(vm);
 
-	Local* local = &compiler->locals[compiler->localCount++];
-	local->depth = 0;
-	local->isCaptured = false;
-	local->name.start = "";
-	local->name.length = 0;
-
 	vm->compiler = compiler;
 }
 

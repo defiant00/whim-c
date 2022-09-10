@@ -13,6 +13,7 @@ typedef struct {
 	ObjClosure* closure;
 	uint8_t* ip;
 	Value* slots;
+	bool popOne;
 } CallFrame;
 
 struct VM {
@@ -22,6 +23,7 @@ struct VM {
 	Value* stackTop;
 	Table globals;
 	Table strings;
+	ObjString* initString;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
 	size_t nextGC;

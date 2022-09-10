@@ -78,6 +78,12 @@ static void blackenObject(VM* vm, Obj* object) {
 #endif
 
 	switch (object->type) {
+	case OBJ_BOUND_METHOD: {
+		ObjBoundMethod* bound = (ObjBoundMethod*)object;
+		markValue(vm, bound->receiver);
+		markObject(vm, (Obj*)bound->method);
+		break;
+	}
 	case OBJ_CLASS: {
 		ObjClass* _class = (ObjClass*)object;
 		markObject(vm, (Obj*)_class->name);
@@ -108,7 +114,7 @@ static void blackenObject(VM* vm, Obj* object) {
 		markValue(vm, ((ObjUpvalue*)object)->closed);
 		break;
 	}
-}
+	}
 
 static void freeObject(VM* vm, Obj* object) {
 #ifdef DEBUG_LOG_GC
@@ -116,6 +122,9 @@ static void freeObject(VM* vm, Obj* object) {
 #endif
 
 	switch (object->type) {
+	case OBJ_BOUND_METHOD:
+		FREE(ObjBoundMethod, object);
+		break;
 	case OBJ_CLASS: {
 		ObjClass* _class = (ObjClass*)object;
 		freeTable(vm, &_class->fields);
@@ -170,6 +179,7 @@ static void markRoots(VM* vm) {
 
 	markTable(vm, &vm->globals);
 	markCompilerRoots(vm);
+	markObject(vm, (Obj*)vm->initString);
 }
 
 static void traceReferences(VM* vm) {

@@ -1,25 +1,17 @@
 // simple test file
 
 c :: class
-	first :: 1
-	second := 25
-	sub :: class
-		third :: '_erd_'
-	/class
-	func :: fn()
-		print('a func\n')
+	init :: fn(self, name)
+		self.name := name
+	/fn
+
+	greet :: fn(self, x)
+		print(x, ' HEY ', self.name)
 	/fn
 /class
 
-c.second %= 11
+i :: c('me!')
+i.greet('first')
 
-print(c.first, c.second, c.sub.third, '\n')
-c.func()
-
-i :: c()
-i.first :: 11
-i.second := 22
-
-i.second -= 3
-
-print(i.first, i.second, '\n')
+f := i.greet
+f('second')

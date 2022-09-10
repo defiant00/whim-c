@@ -113,7 +113,12 @@ static void emitLoop(VM* vm, int loopStart) {
 }
 
 static void emitReturn(VM* vm) {
-	emitByte(vm, OP_NIL);
+	if (vm->compiler->type == TYPE_INITIALIZER) {
+		emitBytes(vm, OP_GET_LOCAL, 0);
+	}
+	else {
+		emitByte(vm, OP_NIL);
+	}
 	emitByte(vm, OP_RETURN);
 }
 
@@ -185,9 +190,9 @@ static void scopePop(VM* vm, int depth) {
 			emitByte(vm, OP_CLOSE_UPVALUE);
 		}
 		else {
-		emitByte(vm, OP_POP);
+			emitByte(vm, OP_POP);
+		}
 	}
-}
 }
 
 static void expression(VM* vm);
@@ -374,6 +379,7 @@ static bool dot_p(VM* vm) {
 		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
 
 		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->isMethod = false;
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
@@ -391,6 +397,7 @@ static bool dot_p(VM* vm) {
 	case TOKEN_PERCENT_EQUAL: {
 		// assignment
 		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->isMethod = false;
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
@@ -416,11 +423,16 @@ static bool dot_p(VM* vm) {
 }
 
 static void function(VM* vm) {
+	bool isMethod = vm->compiler->isMethod;
 	Compiler compiler;
 	initCompiler(vm, &compiler, TYPE_FUNCTION);
 	if (vm->compiler->enclosing->isNamedDeclaration) {
 		compiler.function->name = copyString(vm, vm->compiler->enclosing->nameStart,
 			vm->compiler->enclosing->nameLength);
+
+		if (isMethod && compiler.function->name == vm->initString) {
+			compiler.type = TYPE_INITIALIZER;
+		}
 	}
 	beginScope(vm);
 
@@ -458,6 +470,7 @@ static void class_field(VM* vm) {
 		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
 
 		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->isMethod = true;
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
@@ -558,6 +571,7 @@ static bool variable_p(VM* vm) {
 		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
 
 		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->isMethod = false;
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
@@ -593,6 +607,7 @@ static bool variable_p(VM* vm) {
 		// assignment
 
 		vm->compiler->isNamedDeclaration = true;
+		vm->compiler->isMethod = false;
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
@@ -924,6 +939,9 @@ static void ifStatement(VM* vm) {
 }
 
 static void returnStatement(VM* vm) {
+	if (vm->compiler->type == TYPE_INITIALIZER) {
+		error(vm, "Can't return a value from an initializer.");
+	}
 	expression(vm);
 	emitByte(vm, OP_RETURN);
 }

@@ -46,6 +46,7 @@ typedef struct {
 
 typedef enum {
 	TYPE_FUNCTION,
+	TYPE_INITIALIZER,
 	TYPE_SCRIPT,
 } FunctionType;
 
@@ -54,6 +55,7 @@ typedef struct Compiler {
 	ObjFunction* function;
 	FunctionType type;
 	bool isNamedDeclaration;
+	bool isMethod;
 	const char* nameStart;
 	int nameLength;
 	Local locals[UINT8_COUNT];

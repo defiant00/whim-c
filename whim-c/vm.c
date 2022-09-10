@@ -77,6 +77,9 @@ void initVM(VM* vm) {
 	initTable(&vm->globals);
 	initTable(&vm->strings);
 
+	vm->initString = NULL;
+	vm->initString = copyString(vm, "init", 4);
+
 	defineNative(vm, "print", nativePrint);
 	defineNative(vm, "time", nativeTime);
 }
@@ -84,6 +87,7 @@ void initVM(VM* vm) {
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->strings);
+	vm->initString = NULL;
 	freeObjects(vm);
 }
 
@@ -101,7 +105,7 @@ static Value peek(VM* vm, int distance) {
 	return vm->stackTop[-1 - distance];
 }
 
-static bool call(VM* vm, ObjClosure* closure, int argCount) {
+static bool call(VM* vm, ObjClosure* closure, int argCount, bool popOne) {
 	if (argCount != closure->function->arity) {
 		runtimeError(vm, "Expected %d arguments but got %d.", closure->function->arity, argCount);
 		return false;
@@ -116,18 +120,32 @@ static bool call(VM* vm, ObjClosure* closure, int argCount) {
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
 	frame->slots = vm->stackTop - argCount;
+	frame->popOne = popOne;
 	return true;
 }
 
 static bool callValue(VM* vm, Value callee, int argCount) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
+		case OBJ_BOUND_METHOD: {
+			ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+			vm->stackTop[-argCount - 1] = bound->receiver;
+			return call(vm, bound->method, argCount + 1, false);
+		}
 		case OBJ_CLASS: {
 			ObjClass* _class = AS_CLASS(callee);
 			vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, _class));
+			Value initializer;
+			if (tableGet(&_class->fields, vm->initString, &initializer)) {
+				return call(vm, AS_CLOSURE(initializer), argCount + 1, false);
+			}
+			else if (argCount != 0) {
+				runtimeError(vm, "Expected 0 arguments but got %d.", argCount);
+				return false;
+			}
 			return true;
 		}
-		case OBJ_CLOSURE: return call(vm, AS_CLOSURE(callee), argCount);
+		case OBJ_CLOSURE: return call(vm, AS_CLOSURE(callee), argCount, true);
 		case OBJ_NATIVE: {
 			NativeFn native = AS_NATIVE(callee);
 			Value result = native(argCount, vm->stackTop - argCount);
@@ -138,6 +156,24 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 		}
 	}
 	runtimeError(vm, "Can only call functions and classes.");
+	return false;
+}
+
+static bool bindMethod(VM* vm, Value value, ObjString* name) {
+	if (IS_INSTANCE(value)) {
+		ObjInstance* instance = AS_INSTANCE(value);
+		Value method;
+		if (tableGet(&instance->_class->fields, name, &method)) {
+			if (IS_CLOSURE(method)) {
+				ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+				pop(vm);
+				push(vm, OBJ_VAL(bound));
+				return true;
+			}
+		}
+	}
+
+	runtimeError(vm, "Undefined property '%s'.", name->chars);
 	return false;
 }
 
@@ -527,8 +563,10 @@ static InterpretResult run(VM* vm) {
 				break;
 			}
 
-			runtimeError(vm, "Undefined property '%s'.", name->chars);
-			return INTERPRET_RUNTIME_ERROR;
+			if (!bindMethod(vm, peek(vm, 0), name)) {
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			break;
 		}
 		case OP_SET_PROPERTY: {
 			Table* fields;
@@ -713,16 +751,18 @@ static InterpretResult run(VM* vm) {
 			pop(vm);
 			break;
 		case OP_RETURN: {
+			Value* newTop = frame->slots;
+			if (frame->popOne) newTop--;
+
 			Value result = pop(vm);
-			closeUpvalues(vm, frame->slots);
+			closeUpvalues(vm, newTop);
 			vm->frameCount--;
 			if (vm->frameCount == 0) {
 				pop(vm);
 				return INTERPRET_OK;
 			}
 
-			// subtract 1 to remove the function as well
-			vm->stackTop = frame->slots - 1;
+			vm->stackTop = newTop;
 			push(vm, result);
 			frame = &vm->frames[vm->frameCount - 1];
 			break;
@@ -752,7 +792,7 @@ InterpretResult interpret(VM* vm, const char* source) {
 	ObjClosure* closure = newClosure(vm, function);
 	pop(vm);
 	push(vm, OBJ_VAL(closure));
-	call(vm, closure, 0);
+	call(vm, closure, 0, true);
 
 	return run(vm);
 }

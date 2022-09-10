@@ -27,6 +27,7 @@ static Obj* allocateObject(VM* vm, size_t size, ObjType type) {
 ObjClass* newClass(VM* vm, ObjString* name) {
 	ObjClass* _class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
 	_class->name = name;
+	initTable(&_class->fields);
 	return _class;
 }
 

@@ -79,6 +79,7 @@ typedef struct {
 typedef struct {
 	Obj obj;
 	ObjString* name;
+	Table fields;
 } ObjClass;
 
 typedef struct {

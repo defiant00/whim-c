@@ -187,8 +187,13 @@ static void endScope(VM* vm) {
 static void scopePop(VM* vm, int depth) {
 	for (int i = vm->compiler->localCount - 1; i >= 0; i--) {
 		if (vm->compiler->locals[i].depth < depth) return;
+		if (vm->compiler->locals[i].isCaptured) {
+			emitByte(vm, OP_CLOSE_UPVALUE);
+		}
+		else {
 		emitByte(vm, OP_POP);
 	}
+}
 }
 
 static void expression(VM* vm);

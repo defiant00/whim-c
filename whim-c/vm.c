@@ -159,6 +159,45 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 	return false;
 }
 
+static bool invokeFromClass(VM* vm, ObjClass* _class, ObjString* name, int argCount) {
+	Value method;
+	if (!tableGet(&_class->fields, name, &method)) {
+		runtimeError(vm, "Undefined property '%s'.", name->chars);
+		return false;
+	}
+	return call(vm, AS_CLOSURE(method), argCount, false);
+}
+
+static bool invoke(VM* vm, ObjString* name, int argCount) {
+	Value receiver = peek(vm, argCount);
+
+	if (IS_INSTANCE(receiver)) {
+		ObjInstance* instance = AS_INSTANCE(receiver);
+
+		Value value;
+		if (tableGet(&instance->fields, name, &value)) {
+			vm->stackTop[-argCount - 1] = value;
+			return callValue(vm, value, argCount);
+		}
+
+		return invokeFromClass(vm, instance->_class, name, argCount + 1);
+	}
+	else if (IS_CLASS(receiver)) {
+		ObjClass* class = AS_CLASS(receiver);
+
+		Value value;
+		if (tableGet(&class->fields, name, &value)) {
+			vm->stackTop[-argCount - 1] = value;
+			return callValue(vm, value, argCount);
+		}
+
+		runtimeError(vm, "Undefined property '%s'.", name->chars);
+		return false;
+	}
+	runtimeError(vm, "Only classes and instances have properties.");
+	return false;
+}
+
 static bool bindMethod(VM* vm, Value value, ObjString* name) {
 	if (IS_INSTANCE(value)) {
 		ObjInstance* instance = AS_INSTANCE(value);
@@ -361,7 +400,6 @@ static InterpretResult run(VM* vm) {
 		case OP_NIL:	push(vm, NIL_VAL); break;
 		case OP_TRUE:	push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE:	push(vm, BOOL_VAL(false)); break;
-		case OP_DUP:	push(vm, peek(vm, 0)); break;
 		case OP_POP:	pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
@@ -525,7 +563,8 @@ static InterpretResult run(VM* vm) {
 			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
-		case OP_DEFINE_PROPERTY_CONST: {
+		case OP_DEFINE_PROPERTY_CONST:
+		case OP_DEFINE_PROPERTY_CONST_POP: {
 			Table* fields;
 			GET_FIELDS(1);
 
@@ -535,10 +574,11 @@ static InterpretResult run(VM* vm) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
-			pop(vm);
+			if (instruction == OP_DEFINE_PROPERTY_CONST_POP) pop(vm);
 			break;
 		}
-		case OP_DEFINE_PROPERTY_VAR: {
+		case OP_DEFINE_PROPERTY_VAR:
+		case OP_DEFINE_PROPERTY_VAR_POP: {
 			Table* fields;
 			GET_FIELDS(1);
 
@@ -548,7 +588,7 @@ static InterpretResult run(VM* vm) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
-			pop(vm);
+			if (instruction == OP_DEFINE_PROPERTY_VAR_POP) pop(vm);
 			break;
 		}
 		case OP_GET_PROPERTY: {
@@ -725,6 +765,15 @@ static InterpretResult run(VM* vm) {
 		case OP_CALL: {
 			int argCount = READ_BYTE();
 			if (!callValue(vm, peek(vm, argCount), argCount)) {
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			frame = &vm->frames[vm->frameCount - 1];
+			break;
+		}
+		case OP_INVOKE: {
+			ObjString* name = READ_STRING();
+			int argCount = READ_BYTE();
+			if (!invoke(vm, name, argCount)) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			frame = &vm->frames[vm->frameCount - 1];

@@ -303,8 +303,13 @@ static void defineGlobal(VM* vm, uint8_t global, bool constant) {
 	emitBytes(vm, constant ? OP_DEFINE_GLOBAL_CONST : OP_DEFINE_GLOBAL_VAR, global);
 }
 
-static void defineProperty(VM* vm, uint8_t name, bool constant) {
-	emitBytes(vm, constant ? OP_DEFINE_PROPERTY_CONST : OP_DEFINE_PROPERTY_VAR, name);
+static void defineProperty(VM* vm, uint8_t name, bool constant, bool pop) {
+	if (pop) {
+		emitBytes(vm, constant ? OP_DEFINE_PROPERTY_CONST_POP : OP_DEFINE_PROPERTY_VAR_POP, name);
+	}
+	else {
+		emitBytes(vm, constant ? OP_DEFINE_PROPERTY_CONST : OP_DEFINE_PROPERTY_VAR, name);
+	}
 }
 
 static uint8_t argumentList(VM* vm) {
@@ -362,10 +367,21 @@ static bool call_p(VM* vm) {
 	return false;
 }
 
+static void dotHelper(VM* vm, uint8_t name) {
+	if (match(vm, TOKEN_LEFT_PAREN)) {
+		uint8_t argCount = argumentList(vm);
+		emitBytes(vm, OP_INVOKE, name);
+		emitByte(vm, argCount);
+	}
+	else {
+		emitBytes(vm, OP_GET_PROPERTY, name);
+	}
+}
+
 static void dot(VM* vm) {
 	consume(vm, TOKEN_IDENTIFIER, "Expect property name after '.'.");
 	uint8_t name = identifierConstant(vm, &vm->parser.previous);
-	emitBytes(vm, OP_GET_PROPERTY, name);
+	dotHelper(vm, name);
 }
 
 static bool dot_p(VM* vm) {
@@ -385,7 +401,7 @@ static bool dot_p(VM* vm) {
 
 		advance(vm);	// accept :: :=
 		expression(vm);
-		defineProperty(vm, name, constant);
+		defineProperty(vm, name, constant, true);
 
 		return true;
 	}
@@ -418,7 +434,7 @@ static bool dot_p(VM* vm) {
 	}
 	}
 	// not an assignment, so get the property
-	emitBytes(vm, OP_GET_PROPERTY, name);
+	dotHelper(vm, name);
 	return false;
 }
 
@@ -474,12 +490,9 @@ static void class_field(VM* vm) {
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
-		// duplicate the class
-		emitByte(vm, OP_DUP);
-
 		advance(vm);	// accept :: :=
 		expression(vm);
-		defineProperty(vm, name, constant);
+		defineProperty(vm, name, constant, false);
 
 		return;
 	}
@@ -579,10 +592,10 @@ static bool variable_p(VM* vm) {
 			declareLocal(vm, &vm->parser.previous, constant);
 			advance(vm);	// accept :: :=
 
-			// mark initialized if it's a function so it can recursively call itself
-
-			// TODO - class as well?
-			if (vm->parser.current.type == TOKEN_FN) {
+			// mark initialized if it's a function or class
+			// so it can reference itself
+			if (vm->parser.current.type == TOKEN_FN ||
+				vm->parser.current.type == TOKEN_CLASS) {
 				markInitialized(vm);
 			}
 

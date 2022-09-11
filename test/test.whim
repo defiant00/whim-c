@@ -1,17 +1,16 @@
 // simple test file
 
 c :: class
-	init :: fn(self, name)
-		self.name := name
-	/fn
-
-	greet :: fn(self, x)
-		print(x, ' HEY ', self.name)
+	do_thing :: fn(self, x)
+		return x + x
 	/fn
 /class
 
-i :: c('me!')
-i.greet('first')
+i :: c()
+i.other := fn(x)
+	return x * 3
+/fn
 
-f := i.greet
-f('second')
+print(i.do_thing(21), '\n')
+print(i.other(8), '\n')
+print(c.do_thing(i, 11), '\n')

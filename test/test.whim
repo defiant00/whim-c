@@ -1,16 +1,70 @@
 // simple test file
 
-c :: class
-	do_thing :: fn(self, x)
-		return x + x
+A :: class
+	method :: fn(self)
+		print('A method')
+	/fn
+
+	hole :: fn(self)
+		print('hole A')
+	/fn
+
+	otherA :: fn(self)
+		print('other A')
+		self.method()
 	/fn
 /class
 
-i :: c()
-i.other := fn(x)
-	return x * 3
-/fn
+B :: class is A
+	method :: fn(self)
+		print('B method')
+	/fn
 
-print(i.do_thing(21), '\n')
-print(i.other(8), '\n')
-print(c.do_thing(i, 11), '\n')
+	otherB :: fn(self)
+		print('other B')
+		self.method()
+		super.method(self)
+	/fn
+/class
+
+C :: class is B
+	method :: fn(self)
+		print('C method')
+	/fn
+
+	hole :: fn(self)
+		print('hole C')
+		super.hole(self)
+	/fn
+
+	otherC :: fn(self)
+		print('other C')
+		self.method()
+		super.method(self)
+	/fn
+/class
+
+i :: C()
+i.hole()
+print()
+i.otherA()
+print()
+i.otherB()
+print()
+i.otherC()
+
+/*
+hole C
+hole A
+
+other A
+C method
+
+other B
+C method
+A method
+
+other C
+C method
+B method
+*/

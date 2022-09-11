@@ -509,6 +509,12 @@ static void class_expr(VM* vm) {
 		emitByte(vm, OP_ANON_CLASS);
 	}
 
+	if (match(vm, TOKEN_IS)) {
+		expression(vm);
+		// TODO - inheritance
+		emitByte(vm, OP_POP);
+	}
+
 	while (!check(vm, TOKEN_CLASS_END) && !check(vm, TOKEN_EOF)) {
 		class_field(vm);
 	}
@@ -749,6 +755,7 @@ ParseRule rules[] = {
 	[TOKEN_NIL] = {				NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_OR] = {				NULL,		NULL,		NULL,		or_expr,	PREC_OR},
 	[TOKEN_RETURN] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_SUPER] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_THROW] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_TRUE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_TRY] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},

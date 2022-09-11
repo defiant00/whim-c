@@ -244,4 +244,3 @@ compiled: *.whir
 * more compact object header
 * generational gc
 * properties by string
-* separate property define and define pop ops

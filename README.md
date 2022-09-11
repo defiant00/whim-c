@@ -230,6 +230,7 @@ compiled: *.whir
 * error handling
 * compiler arrays should not be a fixed size
 * directly load common number opcodes
+* directly load common local opcodes
 * strings - flexible array members
 * support other key types for hash tables
 * string hash set (instead of table with nil values) for interning

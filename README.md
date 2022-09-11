@@ -186,7 +186,7 @@ loop
 for i in item   // creates an iterator from item, and i contains the next value
 /for
 
-for 5
+for _ in 5
   // loop 5 times
 /for
 

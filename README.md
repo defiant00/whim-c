@@ -244,3 +244,4 @@ compiled: *.whir
 * more compact object header
 * generational gc
 * properties by string
+* properties for well-defined items like class/init

@@ -246,3 +246,4 @@ compiled: *.whir
 * generational gc
 * properties by string
 * properties for well-defined items like class/init
+* setting a property by string with a class or function value should set the name if it is null

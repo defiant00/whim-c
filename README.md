@@ -75,7 +75,7 @@ i.'property'
 i['property']
 i[propName]
 
-// name resolution order: object, type, base type (recursively), global
+// name resolution order: object, type, super type (recursively), global
 
 // blocks end with /block, eg /fn, /if, /for
 
@@ -83,10 +83,10 @@ i[propName]
 MyClass :: class is Parent      // optional inheritance
   // items here are scoped to the class
 
-  // constructor
-  new :: fn(self, x, y)
-    self.base.new(self, x, y)   // self.base(params) would create a new object, so instead
-                                // explicitly call new with the current instance
+  // initializer
+  init :: fn(self, x, y)
+    super.init(self, x, y)      // super evaluates to the parent type, not an instance
+                                // have to explicitly call init with the current instance
     self.x := x
     self.y := y
   /fn
@@ -124,7 +124,7 @@ myInst :: MyClass(1, 2)
 // a class is a map with a few specific values defined
 // name - the name of the type
 // base - optional base class
-// new  - optional constructor
+// init  - optional initializer
 
 // lists are resizable indexable collections of any type denoted with ()
 // () is an empty list, (1,) is a list with one item (the comma is required to distinguish it from grouping)

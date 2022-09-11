@@ -23,7 +23,7 @@ B :: class is A
 	otherB :: fn(self)
 		print('other B')
 		self.method()
-		super.method(self)
+		B.super.method(self)
 	/fn
 /class
 
@@ -34,13 +34,13 @@ C :: class is B
 
 	hole :: fn(self)
 		print('hole C')
-		super.hole(self)
+		C.super.hole(self)
 	/fn
 
 	otherC :: fn(self)
 		print('other C')
 		self.method()
-		super.method(self)
+		C.super.method(self)
 	/fn
 /class
 

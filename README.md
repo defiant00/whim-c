@@ -1,7 +1,8 @@
 # Whimsy
 Simple embeddable programming language.
 
-C implementation based on [Crafting Interpreters](http://craftinginterpreters.com/), to be used as a performance baseline when evaluating other options.
+C implementation based on [Crafting Interpreters](http://craftinginterpreters.com/),
+to be used as a performance baseline when evaluating other options.
 
 ---
 
@@ -61,7 +62,7 @@ myFunc :: fn(x, y, z)
 
 // all functions are static and require an explicit self
 
-// these are equivalent
+// these are equivalent if first is an instance
 first.func(second)
 func(first, second)
 
@@ -75,25 +76,25 @@ i.'property'
 i['property']
 i[propName]
 
-// name resolution order: object, type, super type (recursively), global
+// property name resolution order: object, type, superclass (recursively)
 
 // blocks end with /block, eg /fn, /if, /for
 
 // class
-MyClass :: class is Parent      // optional inheritance
+MyClass :: class is Parent      // optional inheritance, Parent is assigned to MyClass.super
   // items here are scoped to the class
 
   // initializer
   init :: fn(self, x, y)
-    super.init(self, x, y)      // super evaluates to the parent type, not an instance
-                                // have to explicitly call init with the current instance
+    MyClass.super.init(self, x, y)      // super is the superclass, not an instance
+                                        // have to explicitly call init with the current instance
     self.x := x
     self.y := y
   /fn
 
   // method
-  myMethod :: fn(self)      // self is a convention, not a requirement
-    return self.x + self.y
+  myMethod :: fn(self)          // self is a convention, not a requirement
+    return self.x + self.y      // return always returns a value
   /fn
 
   // static variable
@@ -123,12 +124,12 @@ myInst :: MyClass(1, 2)
 
 // a class is a map with a few specific values defined
 // name - the name of the type
-// base - optional base class
+// super - optional superclass
 // init  - optional initializer
 
 // lists are resizable indexable collections of any type denoted with ()
 // () is an empty list, (1,) is a list with one item (the comma is required to distinguish it from grouping)
-// (1, 2, 3) items are separated by commas, the final comma is optional
+// (1, 2, 3,) items are separated by commas, the final comma is optional
 // indexes start at 0
 list := (1, 2.3, 'hi', myObj, MyClass, myFunc)
 list[1]        // this is 2.3

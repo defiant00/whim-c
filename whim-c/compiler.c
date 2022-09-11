@@ -755,7 +755,6 @@ ParseRule rules[] = {
 	[TOKEN_NIL] = {				NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_OR] = {				NULL,		NULL,		NULL,		or_expr,	PREC_OR},
 	[TOKEN_RETURN] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
-	[TOKEN_SUPER] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_THROW] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_TRUE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_TRY] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},

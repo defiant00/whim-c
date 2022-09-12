@@ -82,8 +82,8 @@ typedef struct {
 typedef struct ObjClass {
 	Obj obj;
 	ObjString* name;
-	Table fields;
 	struct ObjClass* super;
+	Table fields;
 } ObjClass;
 
 typedef struct {

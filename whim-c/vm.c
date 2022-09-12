@@ -79,7 +79,11 @@ void initVM(VM* vm) {
 	initTable(&vm->strings);
 
 	vm->initString = NULL;
+	vm->typeString = NULL;
+	vm->superString = NULL;
 	vm->initString = copyString(vm, "init", 4);
+	vm->typeString = copyString(vm, "type", 4);
+	vm->superString = copyString(vm, "super", 5);
 
 	defineNative(vm, "print", nativePrint);
 	defineNative(vm, "time", nativeTime);
@@ -89,6 +93,8 @@ void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->strings);
 	vm->initString = NULL;
+	vm->typeString = NULL;
+	vm->superString = NULL;
 	freeObjects(vm);
 }
 
@@ -181,7 +187,7 @@ static bool invoke(VM* vm, ObjString* name, int argCount) {
 			return callValue(vm, value, argCount);
 		}
 
-		return invokeFromClass(vm, instance->_class, name, argCount + 1);
+		return invokeFromClass(vm, instance->type, name, argCount + 1);
 	}
 	else if (IS_CLASS(receiver)) {
 		ObjClass* class = AS_CLASS(receiver);
@@ -203,7 +209,7 @@ static bool bindMethod(VM* vm, Value value, ObjString* name) {
 	if (IS_INSTANCE(value)) {
 		ObjInstance* instance = AS_INSTANCE(value);
 		Value method;
-		if (tableGet(&instance->_class->fields, name, &method)) {
+		if (tableGet(&instance->type->fields, name, &method)) {
 			if (IS_CLOSURE(method)) {
 				ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
 				pop(vm);

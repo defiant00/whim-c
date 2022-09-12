@@ -60,9 +60,9 @@ ObjFunction* newFunction(VM* vm) {
 	return function;
 }
 
-ObjInstance* newInstance(VM* vm, ObjClass* _class) {
+ObjInstance* newInstance(VM* vm, ObjClass* type) {
 	ObjInstance* instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
-	instance->_class = _class;
+	instance->type = type;
 	initTable(&instance->fields);
 	return instance;
 }
@@ -187,8 +187,8 @@ void printObject(Value value) {
 	case OBJ_FUNCTION:	printFunction(AS_FUNCTION(value)); break;
 	case OBJ_INSTANCE: {
 		ObjInstance* instance = AS_INSTANCE(value);
-		if (instance->_class->name != NULL) {
-			printf("%s instance", AS_INSTANCE(value)->_class->name->chars);
+		if (instance->type->name != NULL) {
+			printf("%s instance", AS_INSTANCE(value)->type->name->chars);
 		}
 		else {
 			printf("anonymous class instance");

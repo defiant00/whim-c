@@ -79,15 +79,16 @@ typedef struct {
 	int upvalueCount;
 } ObjClosure;
 
-typedef struct {
+typedef struct ObjClass {
 	Obj obj;
 	ObjString* name;
 	Table fields;
+	struct ObjClass* super;
 } ObjClass;
 
 typedef struct {
 	Obj obj;
-	ObjClass* _class;
+	ObjClass* type;
 	Table fields;
 } ObjInstance;
 

@@ -24,6 +24,8 @@ struct VM {
 	Table globals;
 	Table strings;
 	ObjString* initString;
+	ObjString* typeString;
+	ObjString* superString;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
 	size_t nextGC;

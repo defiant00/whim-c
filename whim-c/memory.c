@@ -106,7 +106,7 @@ static void blackenObject(VM* vm, Obj* object) {
 	}
 	case OBJ_INSTANCE: {
 		ObjInstance* instance = (ObjInstance*)object;
-		markObject(vm, (Obj*)instance->_class);
+		markObject(vm, (Obj*)instance->type);
 		markTable(vm, &instance->fields);
 		break;
 	}
@@ -179,7 +179,10 @@ static void markRoots(VM* vm) {
 
 	markTable(vm, &vm->globals);
 	markCompilerRoots(vm);
+
 	markObject(vm, (Obj*)vm->initString);
+	markObject(vm, (Obj*)vm->typeString);
+	markObject(vm, (Obj*)vm->superString);
 }
 
 static void traceReferences(VM* vm) {

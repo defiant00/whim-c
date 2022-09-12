@@ -510,9 +510,9 @@ static void class_expr(VM* vm) {
 	}
 
 	if (match(vm, TOKEN_IS)) {
+		uint8_t super = makeConstant(vm, OBJ_VAL(vm->superString));
 		expression(vm);
-		// TODO - inheritance
-		emitByte(vm, OP_POP);
+		defineProperty(vm, super, false, false);
 	}
 
 	while (!check(vm, TOKEN_CLASS_END) && !check(vm, TOKEN_EOF)) {

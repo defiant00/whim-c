@@ -1,5 +1,23 @@
 // simple test file
 
+c :: class
+	x := 3
+	y :: fn(self)
+		print('hi')
+	/fn
+/class
+
+i :: c()
+i.y()
+c.y('yay')
+print(c.x)
+print(i.x)
+c.x += 3
+i.x += 2
+print(c.x)
+print(i.x)
+
+/*
 A :: class
 	method :: fn(self)
 		print('A method')
@@ -67,4 +85,5 @@ A method
 other C
 C method
 B method
+*/
 */

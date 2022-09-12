@@ -34,6 +34,7 @@ ObjBoundMethod* newBoundMethod(VM* vm, Value receiver, ObjClosure* method) {
 ObjClass* newClass(VM* vm, ObjString* name) {
 	ObjClass* _class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
 	_class->name = name;
+	_class->super = NULL;
 	initTable(&_class->fields);
 	return _class;
 }
@@ -64,6 +65,7 @@ ObjInstance* newInstance(VM* vm, ObjClass* type) {
 	ObjInstance* instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
 	instance->type = type;
 	initTable(&instance->fields);
+	tableSet(vm, &instance->fields, vm->typeString, OBJ_VAL(type));
 	return instance;
 }
 

@@ -92,9 +92,11 @@ void initVM(VM* vm) {
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->strings);
+
 	vm->initString = NULL;
 	vm->typeString = NULL;
 	vm->superString = NULL;
+
 	freeObjects(vm);
 }
 
@@ -143,6 +145,9 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 			ObjClass* _class = AS_CLASS(callee);
 			vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, _class));
 			Value initializer;
+
+			// TODO - recursive if super != NULL
+
 			if (tableGet(&_class->fields, vm->initString, &initializer)) {
 				return call(vm, AS_CLOSURE(initializer), argCount + 1, false);
 			}
@@ -168,6 +173,9 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 
 static bool invokeFromClass(VM* vm, ObjClass* _class, ObjString* name, int argCount) {
 	Value method;
+
+	// TODO - recursive if super != NULL
+
 	if (!tableGet(&_class->fields, name, &method)) {
 		runtimeError(vm, "Undefined property '%s'.", name->chars);
 		return false;
@@ -192,6 +200,8 @@ static bool invoke(VM* vm, ObjString* name, int argCount) {
 	else if (IS_CLASS(receiver)) {
 		ObjClass* class = AS_CLASS(receiver);
 
+		// TODO - recursive if super != NULL
+
 		Value value;
 		if (tableGet(&class->fields, name, &value)) {
 			vm->stackTop[-argCount - 1] = value;
@@ -209,6 +219,9 @@ static bool bindMethod(VM* vm, Value value, ObjString* name) {
 	if (IS_INSTANCE(value)) {
 		ObjInstance* instance = AS_INSTANCE(value);
 		Value method;
+
+		// TODO - recursive bind
+
 		if (tableGet(&instance->type->fields, name, &method)) {
 			if (IS_CLOSURE(method)) {
 				ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
@@ -351,6 +364,7 @@ static InterpretResult run(VM* vm) {
 	} while (false)
 #define PROP_NUM_OP_ASSIGN(op) \
 	do { \
+		/* TODO - recursive property get and special assign */ \
 		Table* fields; \
 		GET_FIELDS(1); \
 		ObjString* name = READ_STRING(); \
@@ -575,6 +589,8 @@ static InterpretResult run(VM* vm) {
 			Table* fields;
 			GET_FIELDS(1);
 
+			// TODO - special assign
+
 			ObjString* name = READ_STRING();
 			if (!tableAdd(vm, fields, name, AS_CONST(peek(vm, 0)))) {
 				runtimeError(vm, "Property '%s' already exists.", name->chars);
@@ -589,6 +605,8 @@ static InterpretResult run(VM* vm) {
 			Table* fields;
 			GET_FIELDS(1);
 
+			// TODO - special assign
+
 			ObjString* name = READ_STRING();
 			if (!tableAdd(vm, fields, name, AS_VAR(peek(vm, 0)))) {
 				runtimeError(vm, "Property '%s' already exists.", name->chars);
@@ -601,6 +619,8 @@ static InterpretResult run(VM* vm) {
 		case OP_GET_PROPERTY: {
 			Table* fields;
 			GET_FIELDS(0);
+
+			// TODO - recursive special get
 
 			ObjString* name = READ_STRING();
 			Value value;
@@ -619,6 +639,8 @@ static InterpretResult run(VM* vm) {
 			Table* fields;
 			GET_FIELDS(1);
 
+			// TODO - recursive property get and special assign
+
 			ObjString* name = READ_STRING();
 			Value* value;
 			if (!tableGetPtr(fields, name, &value)) {
@@ -636,6 +658,8 @@ static InterpretResult run(VM* vm) {
 		case OP_ADD_SET_PROPERTY: {
 			Table* fields;
 			GET_FIELDS(1);
+
+			// TODO - recursive property get and special assign
 
 			ObjString* name = READ_STRING();
 			Value* value;
@@ -666,6 +690,8 @@ static InterpretResult run(VM* vm) {
 		case OP_MODULUS_SET_PROPERTY: {
 			Table* fields;
 			GET_FIELDS(1);
+
+			// TODO - recursive property get and special assign
 
 			ObjString* name = READ_STRING();
 			Value* value;

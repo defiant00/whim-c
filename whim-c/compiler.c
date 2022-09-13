@@ -198,7 +198,6 @@ static void scopePop(VM* vm, int depth) {
 static void expression(VM* vm);
 static void statement(VM* vm);
 static void block(VM* vm, TokenType end, const char* missingMessage);
-static void declaration(VM* vm);
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(VM* vm, Precedence precedence);
 
@@ -804,7 +803,7 @@ static void expressionFromPrevious(VM* vm) {
 
 static void block(VM* vm, TokenType end, const char* missingMessage) {
 	while (!check(vm, end) && !check(vm, TOKEN_EOF)) {
-		declaration(vm);
+		statement(vm);
 	}
 
 	consume(vm, end, missingMessage);
@@ -994,12 +993,6 @@ static void synchronize(VM* vm) {
 	}
 }
 
-static void declaration(VM* vm) {
-	statement(vm);
-
-	if (vm->parser.panicMode) synchronize(vm);
-}
-
 static void statement(VM* vm) {
 	vm->compiler->isNamedDeclaration = false;
 
@@ -1029,6 +1022,8 @@ static void statement(VM* vm) {
 	else {
 		expressionStatement(vm);
 	}
+
+	if (vm->parser.panicMode) synchronize(vm);
 }
 
 ObjFunction* compile(VM* vm, const char* source) {
@@ -1043,7 +1038,7 @@ ObjFunction* compile(VM* vm, const char* source) {
 	advance(vm);
 
 	while (!match(vm, TOKEN_EOF)) {
-		declaration(vm);
+		statement(vm);
 	}
 
 	ObjFunction* function = endCompiler(vm);

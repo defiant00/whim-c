@@ -750,6 +750,7 @@ ParseRule rules[] = {
 	[TOKEN_IF] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IN] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IS] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_LOOP] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_NIL] = {				NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_OR] = {				NULL,		NULL,		NULL,		or_expr,	PREC_OR},
 	[TOKEN_RETURN] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
@@ -759,6 +760,7 @@ ParseRule rules[] = {
 	[TOKEN_FN_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FOR_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IF_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
+	[TOKEN_LOOP_END] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_ERROR] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_EOF] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 };
@@ -970,6 +972,7 @@ static void synchronize(VM* vm) {
 		case TOKEN_FN_END:
 		case TOKEN_FOR_END:
 		case TOKEN_IF_END:
+		case TOKEN_LOOP_END:
 		case TOKEN_SEMICOLON:
 			return;
 		}
@@ -982,6 +985,7 @@ static void synchronize(VM* vm) {
 		case TOKEN_FN:
 		case TOKEN_FOR:
 		case TOKEN_IF:
+		case TOKEN_LOOP:
 		case TOKEN_RETURN:
 			return;
 		}

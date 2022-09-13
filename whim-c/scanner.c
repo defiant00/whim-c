@@ -152,6 +152,7 @@ static TokenType identifierType(Scanner* scanner) {
 			}
 		}
 		break;
+	case 'l': return checkKeyword(scanner, 1, 3, "oop", TOKEN_LOOP);
 	case 'n': return checkKeyword(scanner, 1, 2, "il", TOKEN_NIL);
 	case 'o': return checkKeyword(scanner, 1, 1, "r", TOKEN_OR);
 	case 'r': return checkKeyword(scanner, 1, 5, "eturn", TOKEN_RETURN);
@@ -300,6 +301,15 @@ Token scanToken(Scanner* scanner) {
 				if (scanner->current[1] == 'f' && !isAlphaOrDigit(scanner->current[2])) {
 					advanceMulti(scanner, 2);
 					return makeToken(scanner, TOKEN_IF_END);
+				}
+				return makeToken(scanner, TOKEN_SLASH);
+			case 'l':
+				if (scanner->current[1] == 'o' &&
+					scanner->current[2] == 'o' &&
+					scanner->current[3] == 'p' &&
+					!isAlphaOrDigit(scanner->current[4])) {
+					advanceMulti(scanner, 4);
+					return makeToken(scanner, TOKEN_LOOP_END);
 				}
 				return makeToken(scanner, TOKEN_SLASH);
 			default:

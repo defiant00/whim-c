@@ -10,6 +10,7 @@
 
 #define FREE(type, pointer) reallocate(vm, pointer, sizeof(type), 0)
 
+// table optimization depends on capacity always being a power of 2
 #define GROW_CAPACITY(capacity) \
 	((capacity) < 8 ? 8 : (capacity) * 2)
 

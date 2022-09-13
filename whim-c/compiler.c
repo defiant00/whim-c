@@ -738,14 +738,12 @@ ParseRule rules[] = {
 	[TOKEN_NUMBER] = {			NULL,		NULL,		number,		NULL,		PREC_NONE},
 	[TOKEN_AND] = {				NULL,		NULL,		NULL,		and_expr,	PREC_AND},
 	[TOKEN_BREAK] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
-	[TOKEN_CATCH] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS] = {			NULL,		NULL,		class_expr,	NULL,		PREC_NONE},
 	[TOKEN_CONTINUE] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_DO] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_ELIF] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_ELSE] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FALSE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
-	[TOKEN_FINALLY] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FN] = {				NULL,		NULL,		function,	NULL,		PREC_NONE},
 	[TOKEN_FOR] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FROM] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
@@ -755,15 +753,12 @@ ParseRule rules[] = {
 	[TOKEN_NIL] = {				NULL,		NULL,		literal,	NULL,		PREC_NONE},
 	[TOKEN_OR] = {				NULL,		NULL,		NULL,		or_expr,	PREC_OR},
 	[TOKEN_RETURN] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
-	[TOKEN_THROW] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_TRUE] = {			NULL,		NULL,		literal,	NULL,		PREC_NONE},
-	[TOKEN_TRY] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_CLASS_END] = {		NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_DO_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FN_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_FOR_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_IF_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
-	[TOKEN_TRY_END] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_ERROR] = {			NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 	[TOKEN_EOF] = {				NULL,		NULL,		NULL,		NULL,		PREC_NONE},
 };
@@ -976,23 +971,18 @@ static void synchronize(VM* vm) {
 		case TOKEN_FOR_END:
 		case TOKEN_IF_END:
 		case TOKEN_SEMICOLON:
-		case TOKEN_TRY_END:
 			return;
 		}
 
 		switch (vm->parser.current.type) {
 		case TOKEN_BREAK:
-		case TOKEN_CATCH:
 		case TOKEN_CLASS:
 		case TOKEN_CONTINUE:
 		case TOKEN_DO:
-		case TOKEN_FINALLY:
 		case TOKEN_FN:
 		case TOKEN_FOR:
 		case TOKEN_IF:
 		case TOKEN_RETURN:
-		case TOKEN_THROW:
-		case TOKEN_TRY:
 			return;
 		}
 

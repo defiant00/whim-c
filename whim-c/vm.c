@@ -306,6 +306,54 @@ static ObjString* concatValue(VM* vm, ObjString* a) {
 	return result;
 }
 
+static bool defineProperty(VM* vm, ObjString* name, Value obj, Value value) {
+	Table* fields;
+	if (IS_INSTANCE(obj)) {
+		ObjInstance* instance = AS_INSTANCE(obj);
+		fields = &instance->fields;
+
+		if (name == vm->typeString) {
+			if (IS_CLASS(value)) {
+				instance->type = AS_CLASS(value);
+			}
+			else {
+				runtimeError(vm, "Instance type must be a class.");
+				return false;
+			}
+		}
+	}
+	else if (IS_CLASS(obj)) {
+		ObjClass* _class = AS_CLASS(obj);
+		fields = &_class->fields;
+
+		if (name == vm->superString) {
+			if (IS_CLASS(value)) {
+				ObjClass* super = AS_CLASS(value);
+				if (_class != super) {
+					_class->super = super;
+				}
+				else {
+					runtimeError(vm, "Class cannot be its own superclass.");
+					return false;
+				}
+			}
+			else {
+				runtimeError(vm, "Superclass must be a class.");
+				return false;
+			}
+		}
+	}
+	else {
+		runtimeError(vm, "Only classes and instances have properties.");
+		return false;
+	}
+
+	if (!tableAdd(vm, fields, name, value)) {
+		runtimeError(vm, "Property '%s' already exists.", name->chars);
+		return false;
+	}
+}
+
 static InterpretResult run(VM* vm) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 
@@ -586,14 +634,8 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_DEFINE_PROPERTY_CONST:
 		case OP_DEFINE_PROPERTY_CONST_POP: {
-			Table* fields;
-			GET_FIELDS(1);
-
-			// TODO - special assign
-
 			ObjString* name = READ_STRING();
-			if (!tableAdd(vm, fields, name, AS_CONST(peek(vm, 0)))) {
-				runtimeError(vm, "Property '%s' already exists.", name->chars);
+			if (!defineProperty(vm, name, peek(vm, 1), AS_CONST(peek(vm, 0)))) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
@@ -602,14 +644,8 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_DEFINE_PROPERTY_VAR:
 		case OP_DEFINE_PROPERTY_VAR_POP: {
-			Table* fields;
-			GET_FIELDS(1);
-
-			// TODO - special assign
-
 			ObjString* name = READ_STRING();
-			if (!tableAdd(vm, fields, name, AS_VAR(peek(vm, 0)))) {
-				runtimeError(vm, "Property '%s' already exists.", name->chars);
+			if (!defineProperty(vm, name, peek(vm, 1), AS_VAR(peek(vm, 0)))) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);

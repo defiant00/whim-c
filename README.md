@@ -250,7 +250,6 @@ compiled: *.whir
 * more compact object header
 * generational gc
 * properties by string
-* properties for well-defined items like class/init
 * setting a property by string with a class or function value should set the name if it is null
 * negate op with a number as the next token should resolve to a single negative constant
 * NaN boxing

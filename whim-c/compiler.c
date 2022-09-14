@@ -815,10 +815,18 @@ static void breakStatement(VM* vm) {
 		return;
 	}
 
+	expression(vm);
+
+	int skipJump = emitJump(vm, OP_JUMP_IF_FALSE_POP);
+
 	Loop* loop = &vm->compiler->loops[vm->compiler->loopCount - 1];
 	scopePop(vm, loop->depth);
-	patchJump(vm, loop->exit);
+	if (loop->exit != -1) {
+		patchJump(vm, loop->exit);
+	}
 	loop->exit = emitJump(vm, OP_JUMP);
+
+	patchJump(vm, skipJump);
 }
 
 static void continueStatement(VM* vm) {
@@ -827,9 +835,15 @@ static void continueStatement(VM* vm) {
 		return;
 	}
 
+	expression(vm);
+
+	int skipJump = emitJump(vm, OP_JUMP_IF_FALSE_POP);
+
 	Loop* loop = &vm->compiler->loops[vm->compiler->loopCount - 1];
 	scopePop(vm, loop->depth);
 	emitLoop(vm, loop->start);
+
+	patchJump(vm, skipJump);
 }
 
 static void expressionStatement(VM* vm) {
@@ -867,20 +881,16 @@ static void forStatement(VM* vm) {
 
 	Loop* loop = &vm->compiler->loops[vm->compiler->loopCount++];
 	loop->start = currentChunk(vm)->count;
+	loop->exit = -1;
 	loop->depth = vm->compiler->scopeDepth;
 
-	if (match(vm, TOKEN_IDENTIFIER)) {
-		if (match(vm, TOKEN_IN)) {
-			// todo - iterator
-		}
-		else {
-			// not an iterator, continue parsing the expression
-			expressionFromPrevious(vm);
-		}
-	}
-	else {
-		expression(vm);
-	}
+	consume(vm, TOKEN_IDENTIFIER, "Expect loop identifier.");
+
+	consume(vm, TOKEN_IN, "Expect 'in'.");
+
+	expression(vm);
+
+	// TODO - iterator
 
 	loop->exit = emitJump(vm, OP_JUMP_IF_FALSE_POP);
 
@@ -953,6 +963,36 @@ static void ifStatement(VM* vm) {
 	consume(vm, TOKEN_IF_END, "Expect '/if' after block.");
 }
 
+static void loopStatement(VM* vm) {
+	if (vm->compiler->loopCount == MAX_LOOP) {
+		error(vm, "Too many nested loops.");
+		return;
+	}
+
+	beginScope(vm);
+
+	Loop* loop = &vm->compiler->loops[vm->compiler->loopCount++];
+	loop->start = currentChunk(vm)->count;
+	loop->exit = -1;
+	loop->depth = vm->compiler->scopeDepth;
+
+	while (vm->parser.current.type != TOKEN_LOOP_END && vm->parser.current.type != TOKEN_EOF) {
+		statement(vm);
+	}
+
+	endScope(vm);
+
+	emitLoop(vm, loop->start);
+
+	if (loop->exit != -1) {
+		patchJump(vm, loop->exit);
+	}
+
+	consume(vm, TOKEN_LOOP_END, "Expect '/loop' after block.");
+
+	vm->compiler->loopCount--;
+}
+
 static void returnStatement(VM* vm) {
 	if (vm->compiler->type == TYPE_INITIALIZER) {
 		error(vm, "Can't return a value from an initializer.");
@@ -1015,6 +1055,9 @@ static void statement(VM* vm) {
 	}
 	else if (match(vm, TOKEN_IF)) {
 		ifStatement(vm);
+	}
+	else if (match(vm, TOKEN_LOOP)) {
+		loopStatement(vm);
 	}
 	else if (match(vm, TOKEN_RETURN)) {
 		returnStatement(vm);

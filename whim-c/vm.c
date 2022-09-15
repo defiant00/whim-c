@@ -352,6 +352,65 @@ static bool defineProperty(VM* vm, ObjString* name, Value obj, Value value) {
 		runtimeError(vm, "Property '%s' already exists.", name->chars);
 		return false;
 	}
+
+	return true;
+}
+
+static bool setProperty(VM* vm, ObjString* name, Value obj, Value value) {
+	Value* current = NULL;
+	ObjClass* _class = NULL;
+	if (IS_INSTANCE(obj)) {
+		ObjInstance* instance = AS_INSTANCE(obj);
+		if (tableGetPtr(&instance->fields, name, &current)) {
+			if (name == vm->typeString) {
+				if (IS_CLASS(value)) {
+					instance->type = AS_CLASS(value);
+				}
+				else {
+					runtimeError(vm, "Instance type must be a class.");
+					return false;
+				}
+			}
+		}
+		_class = instance->type;
+	}
+	else if (IS_CLASS(obj)) {
+		_class = AS_CLASS(obj);
+	}
+
+	while (current == NULL && _class != NULL) {
+		if (tableGetPtr(&_class->fields, name, &current)) {
+			if (name == vm->superString) {
+				if (IS_CLASS(value)) {
+					ObjClass* super = AS_CLASS(value);
+					if (_class != super) {
+						_class->super = super;
+					}
+					else {
+						runtimeError(vm, "Class cannot be its own superclass.");
+						return false;
+					}
+				}
+				else {
+					runtimeError(vm, "Superclass must be a class.");
+					return false;
+				}
+			}
+		}
+		_class = _class->super;
+	}
+
+	if (current == NULL) {
+		runtimeError(vm, "Undefined property '%s'.", name->chars);
+		return false;
+	}
+	if (IS_CONST(*current)) {
+		runtimeError(vm, "Property '%s' is constant.", name->chars);
+		return false;
+	}
+
+	*current = value;
+	return true;
 }
 
 static InterpretResult run(VM* vm) {
@@ -672,22 +731,11 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_SET_PROPERTY: {
-			Table* fields;
-			GET_FIELDS(1);
-
-			// TODO - recursive property get and special assign
-
 			ObjString* name = READ_STRING();
-			Value* value;
-			if (!tableGetPtr(fields, name, &value)) {
-				runtimeError(vm, "Undefined property '%s'.", name->chars);
+			if (!setProperty(vm, name, peek(vm, 1), AS_VAR(peek(vm, 0)))) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Property '%s' is constant.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			*value = AS_VAR(pop(vm));
+			pop(vm);
 			pop(vm);
 			break;
 		}

@@ -144,7 +144,7 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 		case OBJ_CLASS: {
 			ObjClass* _class = AS_CLASS(callee);
 			vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, _class));
-			
+
 			Value initializer;
 			while (_class != NULL) {
 				if (tableGet(&_class->fields, vm->initString, &initializer)) {
@@ -365,6 +365,10 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 	else if (IS_CLASS(obj)) {
 		_class = AS_CLASS(obj);
 	}
+	else {
+		runtimeError(vm, "Only classes and instances have properties.");
+		return false;
+	}
 
 	while (_class != NULL) {
 		if (name == vm->superString && _class->super != NULL) {
@@ -387,6 +391,34 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 				push(vm, value);
 				return true;
 			}
+		}
+		_class = _class->super;
+	}
+
+	runtimeError(vm, "Undefined property '%s'.", name->chars);
+	return false;
+}
+
+static bool getPropertyValue(VM* vm, ObjString* name, Value obj, Value** value) {
+	ObjClass* _class = NULL;
+	if (IS_INSTANCE(obj)) {
+		ObjInstance* instance = AS_INSTANCE(obj);
+		if (tableGetPtr(&instance->fields, name, value)) {
+			return true;
+		}
+		_class = instance->type;
+	}
+	else if (IS_CLASS(obj)) {
+		_class = AS_CLASS(obj);
+	}
+	else {
+		runtimeError(vm, "Only classes and instances have properties.");
+		return false;
+	}
+
+	while (_class != NULL) {
+		if (tableGetPtr(&_class->fields, name, value)) {
+			return true;
 		}
 		_class = _class->super;
 	}
@@ -510,13 +542,9 @@ static InterpretResult run(VM* vm) {
 	} while (false)
 #define PROP_NUM_OP_ASSIGN(op) \
 	do { \
-		/* TODO - recursive property get and special assign */ \
-		Table* fields; \
-		GET_FIELDS(1); \
 		ObjString* name = READ_STRING(); \
 		Value* value; \
-		if (!tableGetPtr(fields, name, &value)) { \
-			runtimeError(vm, "Undefined property '%s'.", name->chars); \
+		if (!getPropertyValue(vm, name, peek(vm, 1), &value)) { \
 			return INTERPRET_RUNTIME_ERROR; \
 		} \
 		if (IS_CONST(*value)) { \
@@ -530,17 +558,6 @@ static InterpretResult run(VM* vm) {
 		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
 		pop(vm); \
 	} while (false)
-#define GET_FIELDS(index) \
-	if (IS_INSTANCE(peek(vm, index))) { \
-		fields = &AS_INSTANCE(peek(vm, index))->fields; \
-	} \
-	else if (IS_CLASS(peek(vm, index))) { \
-		fields = &AS_CLASS(peek(vm, index))->fields; \
-	} \
-	else { \
-		runtimeError(vm, "Only classes and instances have properties."); \
-		return INTERPRET_RUNTIME_ERROR; \
-	}
 
 	for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -767,15 +784,9 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_ADD_SET_PROPERTY: {
-			Table* fields;
-			GET_FIELDS(1);
-
-			// TODO - recursive property get and special assign
-
 			ObjString* name = READ_STRING();
 			Value* value;
-			if (!tableGetPtr(fields, name, &value)) {
-				runtimeError(vm, "Undefined property '%s'.", name->chars);
+			if (!getPropertyValue(vm, name, peek(vm, 1), &value)) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_CONST(*value)) {
@@ -799,15 +810,9 @@ static InterpretResult run(VM* vm) {
 		case OP_MULTIPLY_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(*= ); break;
 		case OP_DIVIDE_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(/= ); break;
 		case OP_MODULUS_SET_PROPERTY: {
-			Table* fields;
-			GET_FIELDS(1);
-
-			// TODO - recursive property get and special assign
-
 			ObjString* name = READ_STRING();
 			Value* value;
-			if (!tableGetPtr(fields, name, &value)) {
-				runtimeError(vm, "Undefined property '%s'.", name->chars);
+			if (!getPropertyValue(vm, name, peek(vm, 1), &value)) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			if (IS_CONST(*value)) {
@@ -962,8 +967,8 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_CLASS: push(vm, OBJ_VAL(newClass(vm, READ_STRING()))); break;
 		case OP_ANON_CLASS: push(vm, OBJ_VAL(newClass(vm, NULL))); break;
-		}
 	}
+}
 
 #undef READ_BYTE
 #undef READ_SHORT
@@ -974,7 +979,6 @@ static InterpretResult run(VM* vm) {
 #undef LOCAL_NUM_OP_ASSIGN
 #undef UPVALUE_NUM_OP_ASSIGN
 #undef PROP_NUM_OP_ASSIGN
-#undef GET_FIELDS
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

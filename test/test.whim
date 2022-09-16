@@ -1,93 +1,22 @@
 // simple test file
 
-b :: class
-	init :: fn(self, name)
-		self.name := name
-	/fn
-
-	greet :: fn(self)
-		print('hi ', self.name)
-	/fn
-/class
-
-c :: class is b
-	
-/class
-
-i :: c('person!')
-i2 :: b('other')
-
-i.greet()
-i2.greet()
-
-
-/*
 A :: class
-	method :: fn(self)
-		print('A method')
-	/fn
-
-	hole :: fn(self)
-		print('hole A')
-	/fn
-
-	otherA :: fn(self)
-		print('other A')
-		self.method()
-	/fn
+	x := 3
 /class
 
 B :: class is A
-	method :: fn(self)
-		print('B method')
-	/fn
-
-	otherB :: fn(self)
-		print('other B')
-		self.method()
-		B.super.method(self)
-	/fn
 /class
 
-C :: class is B
-	method :: fn(self)
-		print('C method')
-	/fn
+i :: B()
 
-	hole :: fn(self)
-		print('hole C')
-		C.super.hole(self)
-	/fn
+print(A.x)
+print(B.x)
+print(i.x)
 
-	otherC :: fn(self)
-		print('other C')
-		self.method()
-		C.super.method(self)
-	/fn
-/class
+A.x += 7
+B.x += 7
+i.x += 7
 
-i :: C()
-i.hole()
-print()
-i.otherA()
-print()
-i.otherB()
-print()
-i.otherC()
-
-/*
-hole C
-hole A
-
-other A
-C method
-
-other B
-C method
-A method
-
-other C
-C method
-B method
-*/
-*/
+print(A.x)
+print(B.x)
+print(i.x)

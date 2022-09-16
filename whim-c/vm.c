@@ -144,14 +144,16 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 		case OBJ_CLASS: {
 			ObjClass* _class = AS_CLASS(callee);
 			vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, _class));
+			
 			Value initializer;
-
-			// TODO - recursive if super != NULL
-
-			if (tableGet(&_class->fields, vm->initString, &initializer)) {
-				return call(vm, AS_CLOSURE(initializer), argCount + 1, false);
+			while (_class != NULL) {
+				if (tableGet(&_class->fields, vm->initString, &initializer)) {
+					return call(vm, AS_CLOSURE(initializer), argCount + 1, false);
+				}
+				_class = _class->super;
 			}
-			else if (argCount != 0) {
+
+			if (argCount != 0) {
 				runtimeError(vm, "Expected 0 arguments but got %d.", argCount);
 				return false;
 			}

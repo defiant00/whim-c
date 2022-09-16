@@ -1,25 +1,24 @@
 // simple test file
 
 b :: class
+	init :: fn(self, name)
+		self.name := name
+	/fn
+
 	greet :: fn(self)
 		print('hi ', self.name)
 	/fn
 /class
 
 c :: class is b
-	init :: fn(self, name)
-		self.name := name
-	/fn
+	
 /class
 
 i :: c('person!')
+i2 :: b('other')
 
-b.greet(i)
-c.greet(i)
-bound := b.greet
-bound(i)
-bound = c.greet
-bound(i)
+i.greet()
+i2.greet()
 
 
 /*

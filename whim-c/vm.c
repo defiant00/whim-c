@@ -174,13 +174,16 @@ static bool callValue(VM* vm, Value callee, int argCount) {
 static bool invokeFromClass(VM* vm, ObjClass* _class, ObjString* name, int argCount) {
 	Value method;
 
-	// TODO - recursive if super != NULL
-
-	if (!tableGet(&_class->fields, name, &method)) {
-		runtimeError(vm, "Undefined property '%s'.", name->chars);
-		return false;
+	ObjClass* current = _class;
+	while (current != NULL) {
+		if (tableGet(&current->fields, name, &method)) {
+			return call(vm, AS_CLOSURE(method), argCount, false);
+		}
+		current = current->super;
 	}
-	return call(vm, AS_CLOSURE(method), argCount, false);
+
+	runtimeError(vm, "Undefined property '%s'.", name->chars);
+	return false;
 }
 
 static bool invoke(VM* vm, ObjString* name, int argCount) {
@@ -198,14 +201,15 @@ static bool invoke(VM* vm, ObjString* name, int argCount) {
 		return invokeFromClass(vm, instance->type, name, argCount + 1);
 	}
 	else if (IS_CLASS(receiver)) {
-		ObjClass* class = AS_CLASS(receiver);
-
-		// TODO - recursive if super != NULL
+		ObjClass* _class = AS_CLASS(receiver);
 
 		Value value;
-		if (tableGet(&class->fields, name, &value)) {
-			vm->stackTop[-argCount - 1] = value;
-			return callValue(vm, value, argCount);
+		while (_class != NULL) {
+			if (tableGet(&_class->fields, name, &value)) {
+				vm->stackTop[-argCount - 1] = value;
+				return callValue(vm, value, argCount);
+			}
+			_class = _class->super;
 		}
 
 		runtimeError(vm, "Undefined property '%s'.", name->chars);
@@ -341,7 +345,7 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 	if (IS_INSTANCE(obj)) {
 		ObjInstance* instance = AS_INSTANCE(obj);
 
-		if (name == vm->typeString && instance->type != NULL) {
+		if (name == vm->typeString) {
 			pop(vm);
 			push(vm, OBJ_VAL(instance->type));
 			return true;

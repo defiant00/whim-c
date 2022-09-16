@@ -14,9 +14,12 @@ c :: class is b
 
 i :: c('person!')
 
-i.greet()
-bound :: i.greet
-bound()
+b.greet(i)
+c.greet(i)
+bound := b.greet
+bound(i)
+bound = c.greet
+bound(i)
 
 
 /*

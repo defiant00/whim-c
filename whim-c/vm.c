@@ -215,27 +215,6 @@ static bool invoke(VM* vm, ObjString* name, int argCount) {
 	return false;
 }
 
-static bool bindMethod(VM* vm, Value value, ObjString* name) {
-	if (IS_INSTANCE(value)) {
-		ObjInstance* instance = AS_INSTANCE(value);
-		Value method;
-
-		// TODO - recursive bind
-
-		if (tableGet(&instance->type->fields, name, &method)) {
-			if (IS_CLOSURE(method)) {
-				ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
-				pop(vm);
-				push(vm, OBJ_VAL(bound));
-				return true;
-			}
-		}
-	}
-
-	runtimeError(vm, "Undefined property '%s'.", name->chars);
-	return false;
-}
-
 static ObjUpvalue* captureUpvalue(VM* vm, Value* local) {
 	ObjUpvalue* prevUpvalue = NULL;
 	ObjUpvalue* upvalue = vm->openUpvalues;
@@ -354,6 +333,60 @@ static bool defineProperty(VM* vm, ObjString* name, Value obj, Value value) {
 	}
 
 	return true;
+}
+
+static bool getProperty(VM* vm, ObjString* name, Value obj) {
+	ObjClass* _class = NULL;
+	bool bind = false;
+	if (IS_INSTANCE(obj)) {
+		ObjInstance* instance = AS_INSTANCE(obj);
+
+		if (name == vm->typeString && instance->type != NULL) {
+			pop(vm);
+			push(vm, OBJ_VAL(instance->type));
+			return true;
+		}
+
+		Value value;
+		if (tableGet(&instance->fields, name, &value)) {
+			pop(vm);
+			push(vm, value);
+			return true;
+		}
+		_class = instance->type;
+		bind = true;
+	}
+	else if (IS_CLASS(obj)) {
+		_class = AS_CLASS(obj);
+	}
+
+	while (_class != NULL) {
+		if (name == vm->superString && _class->super != NULL) {
+			pop(vm);
+			push(vm, OBJ_VAL(_class->super));
+			return true;
+		}
+
+		Value value;
+		if (tableGet(&_class->fields, name, &value)) {
+			if (bind && IS_CLOSURE(value)) {
+				// bind method
+				ObjBoundMethod* bound = newBoundMethod(vm, obj, AS_CLOSURE(value));
+				pop(vm);
+				push(vm, OBJ_VAL(bound));
+				return true;
+			}
+			else {
+				pop(vm);
+				push(vm, value);
+				return true;
+			}
+		}
+		_class = _class->super;
+	}
+
+	runtimeError(vm, "Undefined property '%s'.", name->chars);
+	return false;
 }
 
 static bool setProperty(VM* vm, ObjString* name, Value obj, Value value) {
@@ -712,20 +745,8 @@ static InterpretResult run(VM* vm) {
 			break;
 		}
 		case OP_GET_PROPERTY: {
-			Table* fields;
-			GET_FIELDS(0);
-
-			// TODO - recursive special get
-
 			ObjString* name = READ_STRING();
-			Value value;
-			if (tableGet(fields, name, &value)) {
-				pop(vm);
-				push(vm, value);
-				break;
-			}
-
-			if (!bindMethod(vm, peek(vm, 0), name)) {
+			if (!getProperty(vm, name, peek(vm, 0))) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			break;

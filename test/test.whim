@@ -1,21 +1,23 @@
 // simple test file
 
-c :: class
-	x := 3
-	y :: fn(self)
-		print('hi')
+b :: class
+	greet :: fn(self)
+		print('hi ', self.name)
 	/fn
 /class
 
-i :: c()
-i.y()
-c.y('yay')
-print(c.x)
-print(i.x)
-c.x += 3
-i.x += 2
-print(c.x)
-print(i.x)
+c :: class is b
+	init :: fn(self, name)
+		self.name := name
+	/fn
+/class
+
+i :: c('person!')
+
+i.greet()
+bound :: i.greet
+bound()
+
 
 /*
 A :: class

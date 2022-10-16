@@ -373,7 +373,7 @@ static void dotHelper(VM* vm, uint8_t name) {
 		emitByte(vm, argCount);
 	}
 	else {
-		emitBytes(vm, OP_GET_PROPERTY, name);
+		emitBytes(vm, OP_GET_PROPERTY_POP, name);
 	}
 }
 
@@ -418,9 +418,6 @@ static bool dot_p(VM* vm) {
 		vm->compiler->nameLength = vm->parser.previous.length;
 
 		if (opType != TOKEN_EQUAL) {
-			// duplicate the object so both the get and set have
-			// an object to act on
-			emitByte(vm, OP_DUP);
 			// emit get
 			emitBytes(vm, OP_GET_PROPERTY, name);
 		}

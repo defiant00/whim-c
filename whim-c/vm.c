@@ -326,21 +326,21 @@ static bool defineProperty(VM* vm, ObjString* name, Value obj, Value value) {
 	return true;
 }
 
-static bool getProperty(VM* vm, ObjString* name, Value obj) {
+static bool getProperty(VM* vm, ObjString* name, Value obj, bool doPop) {
 	ObjClass* _class = NULL;
 	bool bind = false;
 	if (IS_INSTANCE(obj)) {
 		ObjInstance* instance = AS_INSTANCE(obj);
 
 		if (name == vm->typeString) {
-			pop(vm);
+			if (doPop) pop(vm);
 			push(vm, OBJ_VAL(instance->type));
 			return true;
 		}
 
 		Value value;
 		if (tableGet(&instance->fields, name, &value)) {
-			pop(vm);
+			if (doPop) pop(vm);
 			push(vm, value);
 			return true;
 		}
@@ -357,7 +357,7 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 
 	while (_class != NULL) {
 		if (name == vm->superString && _class->super != NULL) {
-			pop(vm);
+			if (doPop) pop(vm);
 			push(vm, OBJ_VAL(_class->super));
 			return true;
 		}
@@ -367,12 +367,12 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 			if (bind && IS_CLOSURE(value)) {
 				// bind method
 				ObjBoundMethod* bound = newBoundMethod(vm, obj, AS_CLOSURE(value));
-				pop(vm);
+				if (doPop) pop(vm);
 				push(vm, OBJ_VAL(bound));
 				return true;
 			}
 			else {
-				pop(vm);
+				if (doPop) pop(vm);
 				push(vm, value);
 				return true;
 			}
@@ -485,7 +485,6 @@ static InterpretResult run(VM* vm) {
 		case OP_NIL:	push(vm, NIL_VAL); break;
 		case OP_TRUE:	push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE:	push(vm, BOOL_VAL(false)); break;
-		case OP_DUP:	push(vm, peek(vm, 0)); break;
 		case OP_POP:	pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
@@ -569,9 +568,10 @@ static InterpretResult run(VM* vm) {
 			if (instruction == OP_DEFINE_PROPERTY_VAR_POP) pop(vm);
 			break;
 		}
-		case OP_GET_PROPERTY: {
+		case OP_GET_PROPERTY:
+		case OP_GET_PROPERTY_POP: {
 			ObjString* name = READ_STRING();
-			if (!getProperty(vm, name, peek(vm, 0))) {
+			if (!getProperty(vm, name, peek(vm, 0), instruction == OP_GET_PROPERTY_POP)) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			break;

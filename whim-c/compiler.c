@@ -387,11 +387,12 @@ static bool dot_p(VM* vm) {
 	consume(vm, TOKEN_IDENTIFIER, "Expect property name after '.'.");
 	uint8_t name = identifierConstant(vm, &vm->parser.previous);
 
-	switch (vm->parser.current.type) {
+	TokenType opType = vm->parser.current.type;
+	switch (opType) {
 	case TOKEN_COLON_COLON:
 	case TOKEN_COLON_EQUAL: {
 		// declaration
-		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
+		bool constant = opType == TOKEN_COLON_COLON;
 
 		vm->compiler->isNamedDeclaration = true;
 		vm->compiler->isMethod = false;
@@ -416,18 +417,28 @@ static bool dot_p(VM* vm) {
 		vm->compiler->nameStart = vm->parser.previous.start;
 		vm->compiler->nameLength = vm->parser.previous.length;
 
-		uint8_t op = OP_SET_PROPERTY;
-		switch (vm->parser.current.type) {
-		case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_PROPERTY; break;
-		case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_PROPERTY; break;
-		case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_PROPERTY; break;
-		case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_PROPERTY; break;
-		case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_PROPERTY; break;
+		if (opType != TOKEN_EQUAL) {
+			// duplicate the object so both the get and set have
+			// an object to act on
+			emitByte(vm, OP_DUP);
+			// emit get
+			emitBytes(vm, OP_GET_PROPERTY, name);
 		}
 
 		advance(vm);	// accept = += -= *= /= %=
 		expression(vm);
-		emitBytes(vm, op, name);
+
+		// emit op
+		switch (opType) {
+		case TOKEN_PLUS_EQUAL:		emitByte(vm, OP_ADD); break;
+		case TOKEN_MINUS_EQUAL:		emitByte(vm, OP_SUBTRACT); break;
+		case TOKEN_STAR_EQUAL:		emitByte(vm, OP_MULTIPLY); break;
+		case TOKEN_SLASH_EQUAL:		emitByte(vm, OP_DIVIDE); break;
+		case TOKEN_PERCENT_EQUAL:	emitByte(vm, OP_MODULUS); break;
+		}
+
+		// emit set
+		emitBytes(vm, OP_SET_PROPERTY, name);
 
 		return true;
 	}
@@ -581,12 +592,13 @@ static void variable(VM* vm) {
 }
 
 static bool variable_p(VM* vm) {
-	switch (vm->parser.current.type) {
+	TokenType opType = vm->parser.current.type;
+	switch (opType) {
 	case TOKEN_COLON_COLON:
 	case TOKEN_COLON_EQUAL: {
 		// declaration
 
-		bool constant = vm->parser.current.type == TOKEN_COLON_COLON;
+		bool constant = opType == TOKEN_COLON_COLON;
 
 		vm->compiler->isNamedDeclaration = true;
 		vm->compiler->isMethod = false;
@@ -630,21 +642,13 @@ static bool variable_p(VM* vm) {
 		vm->compiler->nameLength = vm->parser.previous.length;
 
 		int arg = resolveLocal(vm->compiler, &vm->parser.previous);
+		OpCode getOp = OP_GET_LOCAL;
+		OpCode setOp = OP_SET_LOCAL;
 
-		uint8_t op;
 		if (arg != -1) {
 			// local
 			if (vm->compiler->locals[arg].constant) {
 				error(vm, "Local is constant.");
-			}
-
-			op = OP_SET_LOCAL;
-			switch (vm->parser.current.type) {
-			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_LOCAL; break;
-			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_LOCAL; break;
-			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_LOCAL; break;
-			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_LOCAL; break;
-			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_LOCAL; break;
 			}
 		}
 		else if ((arg = resolveUpvalue(vm, vm->compiler, &vm->parser.previous)) != -1) {
@@ -653,33 +657,35 @@ static bool variable_p(VM* vm) {
 			if (local->constant) {
 				error(vm, "Local is constant.");
 			}
-
-			op = OP_SET_UPVALUE;
-			switch (vm->parser.current.type) {
-			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_UPVALUE; break;
-			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_UPVALUE; break;
-			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_UPVALUE; break;
-			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_UPVALUE; break;
-			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_UPVALUE; break;
-			}
+			getOp = OP_GET_UPVALUE;
+			setOp = OP_SET_UPVALUE;
 		}
 		else {
 			// global
 			arg = identifierConstant(vm, &vm->parser.previous);
+			getOp = OP_GET_GLOBAL;
+			setOp = OP_SET_GLOBAL;
+		}
 
-			op = OP_SET_GLOBAL;
-			switch (vm->parser.current.type) {
-			case TOKEN_PLUS_EQUAL:		op = OP_ADD_SET_GLOBAL; break;
-			case TOKEN_MINUS_EQUAL:		op = OP_SUBTRACT_SET_GLOBAL; break;
-			case TOKEN_STAR_EQUAL:		op = OP_MULTIPLY_SET_GLOBAL; break;
-			case TOKEN_SLASH_EQUAL:		op = OP_DIVIDE_SET_GLOBAL; break;
-			case TOKEN_PERCENT_EQUAL:	op = OP_MODULUS_SET_GLOBAL; break;
-			}
+		if (opType != TOKEN_EQUAL) {
+			// emit get
+			emitBytes(vm, getOp, (uint8_t)arg);
 		}
 
 		advance(vm);	// accept = += -= *= /= %=
 		expression(vm);
-		emitBytes(vm, op, (uint8_t)arg);
+
+		// emit op
+		switch (opType) {
+		case TOKEN_PLUS_EQUAL:		emitByte(vm, OP_ADD); break;
+		case TOKEN_MINUS_EQUAL:		emitByte(vm, OP_SUBTRACT); break;
+		case TOKEN_STAR_EQUAL:		emitByte(vm, OP_MULTIPLY); break;
+		case TOKEN_SLASH_EQUAL:		emitByte(vm, OP_DIVIDE); break;
+		case TOKEN_PERCENT_EQUAL:	emitByte(vm, OP_MODULUS); break;
+		}
+
+		// emit set
+		emitBytes(vm, setOp, (uint8_t)arg);
 		return true;
 	}
 	}

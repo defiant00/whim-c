@@ -276,21 +276,6 @@ static void concatenate(VM* vm) {
 	push(vm, OBJ_VAL(result));
 }
 
-static ObjString* concatValue(VM* vm, ObjString* a) {
-	ObjString* b = AS_STRING(peek(vm, 0));
-
-	int length = a->length + b->length;
-	char* chars = ALLOCATE(char, length + 1);
-	memcpy(chars, a->chars, a->length);
-	memcpy(chars + a->length, b->chars, b->length);
-	chars[length] = '\0';
-
-	ObjString* result = takeString(vm, chars, length);
-
-	pop(vm);
-	return result;
-}
-
 static bool defineProperty(VM* vm, ObjString* name, Value obj, Value value) {
 	Table* fields;
 	if (IS_INSTANCE(obj)) {
@@ -399,34 +384,6 @@ static bool getProperty(VM* vm, ObjString* name, Value obj) {
 	return false;
 }
 
-static bool getPropertyValue(VM* vm, ObjString* name, Value obj, Value** value) {
-	ObjClass* _class = NULL;
-	if (IS_INSTANCE(obj)) {
-		ObjInstance* instance = AS_INSTANCE(obj);
-		if (tableGetPtr(&instance->fields, name, value)) {
-			return true;
-		}
-		_class = instance->type;
-	}
-	else if (IS_CLASS(obj)) {
-		_class = AS_CLASS(obj);
-	}
-	else {
-		runtimeError(vm, "Only classes and instances have properties.");
-		return false;
-	}
-
-	while (_class != NULL) {
-		if (tableGetPtr(&_class->fields, name, value)) {
-			return true;
-		}
-		_class = _class->super;
-	}
-
-	runtimeError(vm, "Undefined property '%s'.", name->chars);
-	return false;
-}
-
 static bool setProperty(VM* vm, ObjString* name, Value obj, Value value) {
 	Value* current = NULL;
 	ObjClass* _class = NULL;
@@ -502,62 +459,6 @@ static InterpretResult run(VM* vm) {
 		double a = AS_NUMBER(pop(vm)); \
 		push(vm, valueType(a op b)); \
 	} while (false)
-#define GLOBAL_NUM_OP_ASSIGN(op) \
-	do { \
-		ObjString* name = READ_STRING(); \
-		Value* value; \
-		if (!tableGetPtr(&vm->globals, name, &value)) { \
-			runtimeError(vm, "Undefined variable '%s'.", name->chars); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		if (IS_CONST(*value)) { \
-			runtimeError(vm, "Global '%s' is constant.", name->chars); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
-	} while (false)
-#define LOCAL_NUM_OP_ASSIGN(op) \
-	do { \
-		uint8_t index = READ_BYTE(); \
-		Value* value = &frame->slots[index]; \
-		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
-	} while (false)
-#define UPVALUE_NUM_OP_ASSIGN(op) \
-	do { \
-		uint8_t index = READ_BYTE(); \
-		Value* value = frame->closure->upvalues[index]->location; \
-		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
-	} while (false)
-#define PROP_NUM_OP_ASSIGN(op) \
-	do { \
-		ObjString* name = READ_STRING(); \
-		Value* value; \
-		if (!getPropertyValue(vm, name, peek(vm, 1), &value)) { \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		if (IS_CONST(*value)) { \
-			runtimeError(vm, "Property '%s' is constant.", name->chars); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRET_RUNTIME_ERROR; \
-		} \
-		AS_NUMBER(*value) op AS_NUMBER(pop(vm)); \
-		pop(vm); \
-	} while (false)
 
 	for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -584,6 +485,7 @@ static InterpretResult run(VM* vm) {
 		case OP_NIL:	push(vm, NIL_VAL); break;
 		case OP_TRUE:	push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE:	push(vm, BOOL_VAL(false)); break;
+		case OP_DUP:	push(vm, peek(vm, 0)); break;
 		case OP_POP:	pop(vm); break;
 		case OP_DEFINE_GLOBAL_CONST: {
 			ObjString* name = READ_STRING();
@@ -627,50 +529,6 @@ static InterpretResult run(VM* vm) {
 			*value = AS_VAR(pop(vm));
 			break;
 		}
-		case OP_ADD_SET_GLOBAL: {
-			ObjString* name = READ_STRING();
-			Value* value;
-			if (!tableGetPtr(&vm->globals, name, &value)) {
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Global '%s' is constant.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
-				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
-			}
-			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
-				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
-			}
-			else {
-				runtimeError(vm, "Operands must both be numbers or strings.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			break;
-		}
-		case OP_SUBTRACT_SET_GLOBAL:	GLOBAL_NUM_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_GLOBAL:	GLOBAL_NUM_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_GLOBAL:		GLOBAL_NUM_OP_ASSIGN(/= ); break;
-		case OP_MODULUS_SET_GLOBAL: {
-			ObjString* name = READ_STRING();
-			Value* value;
-			if (!tableGetPtr(&vm->globals, name, &value)) {
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Global '%s' is constant.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
-			break;
-		}
 		case OP_GET_LOCAL: {
 			uint8_t index = READ_BYTE();
 			push(vm, frame->slots[index]);
@@ -681,34 +539,6 @@ static InterpretResult run(VM* vm) {
 			frame->slots[index] = pop(vm);
 			break;
 		}
-		case OP_ADD_SET_LOCAL: {
-			uint8_t index = READ_BYTE();
-			Value* value = &frame->slots[index];
-			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
-				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
-			}
-			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
-				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
-			}
-			else {
-				runtimeError(vm, "Operands must both be numbers or strings.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			break;
-		}
-		case OP_SUBTRACT_SET_LOCAL: LOCAL_NUM_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_LOCAL: LOCAL_NUM_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_LOCAL:	LOCAL_NUM_OP_ASSIGN(/= ); break;
-		case OP_MODULUS_SET_LOCAL: {
-			uint8_t index = READ_BYTE();
-			Value* value = &frame->slots[index];
-			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
-			break;
-		}
 		case OP_GET_UPVALUE: {
 			uint8_t index = READ_BYTE();
 			push(vm, *frame->closure->upvalues[index]->location);
@@ -717,34 +547,6 @@ static InterpretResult run(VM* vm) {
 		case OP_SET_UPVALUE: {
 			uint8_t index = READ_BYTE();
 			*frame->closure->upvalues[index]->location = pop(vm);
-			break;
-		}
-		case OP_ADD_SET_UPVALUE: {
-			uint8_t index = READ_BYTE();
-			Value* value = frame->closure->upvalues[index]->location;
-			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
-				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
-			}
-			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
-				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
-			}
-			else {
-				runtimeError(vm, "Operands must both be numbers or strings.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			break;
-		}
-		case OP_SUBTRACT_SET_UPVALUE:	UPVALUE_NUM_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_UPVALUE:	UPVALUE_NUM_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_UPVALUE:		UPVALUE_NUM_OP_ASSIGN(/= ); break;
-		case OP_MODULUS_SET_UPVALUE: {
-			uint8_t index = READ_BYTE();
-			Value* value = frame->closure->upvalues[index]->location;
-			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			break;
 		}
 		case OP_DEFINE_PROPERTY_CONST:
@@ -780,50 +582,6 @@ static InterpretResult run(VM* vm) {
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			pop(vm);
-			pop(vm);
-			break;
-		}
-		case OP_ADD_SET_PROPERTY: {
-			ObjString* name = READ_STRING();
-			Value* value;
-			if (!getPropertyValue(vm, name, peek(vm, 1), &value)) {
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Property '%s' is constant.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_NUMBER(*value) && IS_NUMBER(peek(vm, 0))) {
-				AS_NUMBER(*value) += AS_NUMBER(pop(vm));
-			}
-			else if (IS_STRING(*value) && IS_STRING(peek(vm, 0))) {
-				AS_STRING(*value) = concatValue(vm, AS_STRING(*value));
-			}
-			else {
-				runtimeError(vm, "Operands must both be numbers or strings.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			pop(vm);
-			break;
-		}
-		case OP_SUBTRACT_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(-= ); break;
-		case OP_MULTIPLY_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(*= ); break;
-		case OP_DIVIDE_SET_PROPERTY:	PROP_NUM_OP_ASSIGN(/= ); break;
-		case OP_MODULUS_SET_PROPERTY: {
-			ObjString* name = READ_STRING();
-			Value* value;
-			if (!getPropertyValue(vm, name, peek(vm, 1), &value)) {
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (IS_CONST(*value)) {
-				runtimeError(vm, "Property '%s' is constant.", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			if (!IS_NUMBER(*value) || !IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRET_RUNTIME_ERROR;
-			}
-			AS_NUMBER(*value) = (double)((int64_t)AS_NUMBER(*value) % (int64_t)AS_NUMBER(pop(vm)));
 			pop(vm);
 			break;
 		}
@@ -967,18 +725,14 @@ static InterpretResult run(VM* vm) {
 		}
 		case OP_CLASS: push(vm, OBJ_VAL(newClass(vm, READ_STRING()))); break;
 		case OP_ANON_CLASS: push(vm, OBJ_VAL(newClass(vm, NULL))); break;
+		}
 	}
-}
 
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
-#undef GLOBAL_NUM_OP_ASSIGN
-#undef LOCAL_NUM_OP_ASSIGN
-#undef UPVALUE_NUM_OP_ASSIGN
-#undef PROP_NUM_OP_ASSIGN
 }
 
 InterpretResult interpret(VM* vm, const char* source) {

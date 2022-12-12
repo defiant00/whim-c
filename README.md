@@ -1,3 +1,5 @@
+> **Warning** - This version is obsolete, please use the [Zig version](https://github.com/whimsy-lang/whim-z).
+
 # Whimsy
 Simple embeddable programming language.
 

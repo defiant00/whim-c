@@ -1,6 +1,7 @@
-> **Warning** - This version is obsolete, please use the [Zig version](https://github.com/whimsy-lang/whim-z).
-
 # Whimsy
+
+> **Note** - This version is obsolete, please use the [Zig version](https://github.com/whimsy-lang/whim-z).
+
 Simple embeddable programming language.
 
 C implementation based on [Crafting Interpreters](http://craftinginterpreters.com/),
